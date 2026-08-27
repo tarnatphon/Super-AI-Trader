@@ -134,6 +134,25 @@ HTML = r"""<!doctype html>
       <option value="DEMO">DEMO — practice coin</option>
     </select>
 
+    <label>Timeframe (like your trading app)</label>
+    <select id="timeframe">
+      <option value="15m">15 minutes</option>
+      <option value="1h" selected>1 hour</option>
+      <option value="4h">4 hours</option>
+      <option value="1d">1 day</option>
+    </select>
+
+    <div style="display:flex;gap:8px;align-items:flex-end;margin-top:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px">
+        <label>Save these settings as</label>
+        <input id="presetName" placeholder="my safe BTC grid" style="padding:12px 14px;font-size:16px">
+      </div>
+      <button class="btn btn-gray" style="width:auto;margin-top:0;padding:12px 16px" onclick="savePreset()">💾 Save preset</button>
+      <select id="presetList" style="width:auto;min-width:160px" onchange="loadPreset()">
+        <option value="">— load a saved preset —</option>
+      </select>
+    </div>
+
     <h2 style="margin-top:22px">2️⃣ Choose how much (practice money)</h2>
     <div class="row">
       <div>
@@ -325,8 +344,36 @@ function vals(){
     grids: parseInt(document.getElementById('grids').value||25),
     mode: document.getElementById('mode').value,
     fee: parseFloat(document.getElementById('fee').value||0.1),
+    timeframe: document.getElementById('timeframe').value,
     days: 600
   };
+}
+async function refreshPresets(){
+  const r=await (await fetch('/api/preset/list')).json();
+  const sel=document.getElementById('presetList');
+  sel.innerHTML='<option value="">— load a saved preset —</option>'+
+    (r.presets||[]).map(p=>`<option value="${p.name}">💾 ${p.name}</option>`).join('');
+}
+async function savePreset(){
+  const name=(document.getElementById('presetName').value||'').trim();
+  if(!name){ alert('Give your preset a name.'); return; }
+  const v=vals();
+  await post('/api/preset/save', Object.assign({name}, v));
+  await refreshPresets();
+  document.getElementById('presetList').value=name;
+}
+async function loadPreset(){
+  const name=document.getElementById('presetList').value;
+  if(!name) return;
+  const r=await (await fetch('/api/preset/load?name='+encodeURIComponent(name))).json();
+  const s=r.settings; if(!s) return;
+  if(s.ticker) document.getElementById('ticker').value=s.ticker;
+  if(s.investment) document.getElementById('investment').value=s.investment;
+  if(s.range_pct) document.getElementById('range_pct').value=s.range_pct;
+  if(s.grids) document.getElementById('grids').value=s.grids;
+  if(s.mode) document.getElementById('mode').value=s.mode;
+  if(s.fee) document.getElementById('fee').value=s.fee;
+  if(s.timeframe) document.getElementById('timeframe').value=s.timeframe;
 }
 function fmt(n){return Number(n).toLocaleString(undefined,{maximumFractionDigits:2});}
 function drawChart(points){
@@ -640,6 +687,7 @@ async function loadChecklist(){
      <div class="fine">${c.detail}</div></span></li>`).join('');
 }
 loadChecklist();
+refreshPresets();
 </script>
 </body>
 </html>

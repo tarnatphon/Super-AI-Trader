@@ -227,6 +227,23 @@ def _replay_advance(steps: int = 1) -> dict:
     return st
 
 
+def _preset_save(payload: dict) -> dict:
+    from ..settings import save_preset
+    name = (payload.get("name") or "my preset").strip()
+    return save_preset(name, payload)
+
+
+def _preset_list() -> dict:
+    from ..settings import list_presets
+    return {"presets": list_presets()}
+
+
+def _preset_load(name: str) -> dict:
+    from ..settings import load_preset
+    r = load_preset(name)
+    return r if r.get("ok") is not None or "error" not in r else r
+
+
 def _autotune(payload: dict) -> dict:
     """Fast AI trailing optimization for the selected coin."""
     from ..learning.trailing import optimize_trailing, explain_optimization
@@ -346,6 +363,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_live_status())
         elif u.path == "/api/capabilities":
             self._send({"ccxt": _exchanges_ok()})
+        elif u.path == "/api/preset/list":
+            self._send(_preset_list())
         elif u.path == "/api/live/stop":
             self._send(_live_stop())
         else:
@@ -382,6 +401,13 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_real_arm(payload))
         elif u.path == "/api/autotune":
             self._send(_autotune(payload))
+        elif u.path == "/api/preset/save":
+            self._send(_preset_save(payload))
+        elif u.path == "/api/preset/list":
+            self._send(_preset_list())
+        elif u.path == "/api/preset/load":
+            q = parse_qs(urlparse(u.path).query)
+            self._send(_preset_load((q.get("name") or [""])[0]))
         else:
             self._send({"error": "not found"}, 404)
 
