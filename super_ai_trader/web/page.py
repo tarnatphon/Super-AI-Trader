@@ -201,6 +201,23 @@ HTML = r"""<!doctype html>
       <button class="btn btn-gray" style="width:auto" onclick="preview()">🕘 Preview — show PAST result</button>
       <button class="btn btn-green" style="margin-top:18px" onclick="liveStart()">▶️ START LIVE (practice)</button>
     </div>
+    <button class="btn btn-blue" style="margin-top:10px" onclick="replayStart()">⏪ TIME MACHINE — replay real past candles</button>
+    <div id="replayBox" style="display:none;margin-top:14px">
+      <div class="fine" id="rp_source"></div>
+      <div class="metrics">
+        <div class="metric"><div class="k">Replay price</div><div class="v" id="rp_price">–</div></div>
+        <div class="metric"><div class="k">ROI so far</div><div class="v" id="rp_roi">–</div></div>
+        <div class="metric"><div class="k">Buys / Sells</div><div class="v" id="rp_fills">–</div></div>
+        <div class="metric"><div class="k">Progress</div><div class="v" id="rp_prog">–</div></div>
+      </div>
+      <svg id="replayChart" viewBox="0 0 600 140" preserveAspectRatio="none"></svg>
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <button class="chip" onclick="replayStep(1)">▶ Step 1</button>
+        <button class="chip" onclick="replayStep(25)">⏩ +25</button>
+        <button class="chip" onclick="replayStep(120)">⏩ +120</button>
+        <button class="chip" onclick="replayPlay()">⏯ Auto-play</button>
+      </div>
+    </div>
     <button class="btn" style="background:#3a2030;color:#ffb3b3;margin-top:10px;display:none" id="stopBtn" onclick="liveStop()">⏹️ STOP the robot</button>
     <div id="liveStatus" class="fine"></div>
     <div id="liveBox" style="display:none">
@@ -358,6 +375,33 @@ async function preview(){
   document.getElementById('prevNote').textContent='🕘 Past preview: ROI '+r.roi_pct+'% over '+
     r.matched_trades_total+' matched fills ('+r.data_source+'). Tap "Show Bot Details" for the chart.';
   botDetailsData(r);
+}
+let replayTimer=null;
+async function replayStart(){
+  const r=await post('/api/replay/start',lvPayload());
+  if(!r.ok && r.error){ document.getElementById('liveStatus').textContent='⚠️ '+r.error; return; }
+  document.getElementById('replayBox').style.display='block';
+  document.getElementById('rp_source').textContent='Time machine: '+r.data_source+
+    ' · '+r.symbol+' · '+r.grid_mode+' · '+r.grids+' grids · range '+r.lower+'–'+r.upper;
+  replayRender(r);
+}
+function replayRender(r){
+  document.getElementById('rp_price').textContent=r.price;
+  document.getElementById('rp_roi').innerHTML=(r.roi_pct>=0?'<span class="up">+':'<span class="down">')+r.roi_pct+'%</span>';
+  document.getElementById('rp_fills').textContent=r.matched_buys+' / '+r.matched_sells+' ('+r.round_trips+' round-trips)';
+  document.getElementById('rp_prog').textContent=r.progress_pct+'%';
+  const curve=r.profit_curve.length>1?r.profit_curve:[r.investment, r.equity||r.investment];
+  drawProfitAt('replayChart',curve);
+  if(r.finished){ if(replayTimer){clearInterval(replayTimer);replayTimer=null;}
+    document.getElementById('rp_source').textContent+='  ✅ Replay finished.'; }
+}
+async function replayStep(n){
+  const r=await post('/api/replay/advance',{steps:n});
+  if(r.ok) replayRender(r);
+}
+function replayPlay(){
+  if(replayTimer){ clearInterval(replayTimer); replayTimer=null; return; }
+  replayTimer=setInterval(()=>replayStep(8),350);
 }
 function drawProfitAt(id,pts){
   const svg=document.getElementById(id); if(!svg)return; svg.innerHTML='';

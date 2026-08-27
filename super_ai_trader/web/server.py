@@ -175,6 +175,58 @@ def _live_start(payload: dict) -> dict:
             "status": sess.status()}
 
 
+def _replay_start(payload: dict) -> dict:
+    """Start a time-machine replay over real (or built-in) historical candles."""
+    from ..grid.engine import GridConfig
+    from ..exchange.replay import ReplayConnector, ReplaySession
+    exchange = payload.get("exchange", "binance")
+    ticker = payload.get("ticker", "SOL")
+    symbol = f"{ticker}/USDT"
+    investment = float(payload.get("investment", 1_000))
+    range_pct = float(payload.get("range_pct", 12))
+    grids = int(payload.get("grids", 25))
+    mode = payload.get("mode", "geometric")
+    timeframe = payload.get("timeframe", "1h")
+    source = "LIVE exchange history"
+    try:
+        bars = _real_bars(exchange, symbol, timeframe=timeframe, limit=int(payload.get("limit", 600)))
+        if len(bars) < 60:
+            raise RuntimeError("not enough candles")
+    except Exception as e:
+        bars = get_series(ticker, days=int(payload.get("limit", 600)), real=False)
+        source = f"practice data (live feed unavailable: install ccxt + internet; {type(e).__name__})"
+    ref = bars[0].close
+    cfg = GridConfig(symbol=symbol,
+                     lower=ref * (1 - range_pct / 100), upper=ref * (1 + range_pct / 100),
+                     grids=grids, mode=mode, investment=investment, fee_pct=0.1,
+                     range_pct=range_pct,
+                     stop_loss_price=ref * (1 - range_pct * 2 / 100),
+                     take_profit_price=ref * (1 + range_pct * 2 / 100))
+    conn = ReplayConnector(bars, exchange_id=exchange, paper_usdt=investment)
+    conn.cfg = cfg
+    sess = ReplaySession(conn, cfg)
+    sess.start()
+    _SESSION["replay"] = sess
+    st = sess.status()
+    st["ok"] = True
+    st["data_source"] = source
+    return st
+
+
+def _replay_advance(steps: int = 1) -> dict:
+    sess = _SESSION.get("replay")
+    if sess is None:
+        return {"ok": False, "error": "no replay — start one first"}
+    info = {}
+    for _ in range(max(1, steps)):
+        if sess.finished:
+            break
+        info = sess.step()
+    st = sess.status()
+    st["ok"] = True
+    return st
+
+
 def _live_status() -> dict:
     sess = _SESSION["live"]
     if sess is None or sess.stopped:
@@ -285,6 +337,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_preview(payload))
         elif u.path == "/api/live/start":
             self._send(_live_start(payload))
+        elif u.path == "/api/replay/start":
+            self._send(_replay_start(payload))
+        elif u.path == "/api/replay/advance":
+            self._send(_replay_advance(int(payload.get("steps", 1))))
         else:
             self._send({"error": "not found"}, 404)
 

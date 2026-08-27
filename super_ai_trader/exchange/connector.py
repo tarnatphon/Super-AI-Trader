@@ -107,22 +107,28 @@ class ExchangeConnector:
 
     # ---- paper fill simulation from a live price tick -------------------- #
     def tick_paper(self, symbol: str, price: float) -> list[Order]:
-        """Fill any resting paper orders crossed by `price`. Returns filled orders."""
+        """Fill any resting paper orders crossed by `price`. Returns filled orders.
+
+        A limit buy at P fills when the market trades at or below P; a limit
+        sell fills when the market trades at or above P (spot-grid matching).
+        """
         if not self.paper:
             return []
         filled_now = []
-        for o in list(self.orders):
-            if o.symbol == "buy" and price <= o.price and not o.filled:
+        for o in list(self.orders):  # iterate a snapshot; safe to remove below
+            if o.filled:
+                continue
+            if o.side == "buy" and price <= o.price:
                 cost = o.amount * o.price
-                if cost <= self.paper_usdt:
+                if cost <= self.paper_usdt + 1e-9:
                     self.paper_usdt -= cost
                     self.base_held += o.amount
                     o.filled = True
                     self.fills.append(o)
                     self.orders.remove(o)
                     filled_now.append(o)
-            elif o.symbol == "sell" and price >= o.price and not o.filled:
-                if o.amount <= self.base_held + 1e-12:
+            elif o.side == "sell" and price >= o.price:
+                if o.amount <= self.base_held + 1e-9:
                     self.paper_usdt += o.amount * o.price
                     self.base_held -= o.amount
                     o.filled = True
