@@ -83,7 +83,8 @@ class BacktestResult:
                 f"(best {m['best_month_pct']:+.2f}, worst {m['worst_month_pct']:+.2f})\n"
                 f"  Risk-adjusted : Sharpe {m['monthly_sharpe']}, "
                 f"Sortino {m['monthly_sortino']}, profit factor {m['profit_factor']}\n"
-                f"  Target band   : avg/month in 2-5% -> {'YES ✅' if m['in_target_band'] else 'no'}\n"
+                f"  Target band   : avg/month in {m['target_band'][0]:.0f}-{m['target_band'][1]:.0f}% "
+                f"-> {'YES ✅' if m['in_target_band'] else 'no'}\n"
             )
         return s
 
@@ -102,6 +103,7 @@ def run_backtest(
     cost_per_side_pct: float = 0.1,
     horizon: int = 5,
     train_fraction: float = 0.6,
+    overrides: dict | None = None,
     verbose: bool = False,
 ) -> BacktestResult:
     bars = get_series(ticker, days=days, real=real)
@@ -130,7 +132,13 @@ def run_backtest(
         risk_config = RiskConfig.steady() if profile == "steady" else (
             RiskConfig.aggressive() if profile == "aggressive" else RiskConfig()
         )
+    # Apply manual percentage overrides on top of the profile.
+    if overrides:
+        for k, v in overrides.items():
+            if v is not None and hasattr(risk_config, k):
+                setattr(risk_config, k, v)
     tp_r = risk_config.take_profit_r_multiple
+    tp_pct = risk_config.take_profit_pct
 
     firm = TradingFirm(use_llm=use_llm, use_orderflow=use_orderflow,
                        learned_model=model if use_learned else None)
@@ -265,12 +273,18 @@ def run_backtest(
                 stop_price = min(stop_price, levels["stop_below"])
             if action == "SELL" and levels.get("stop_above"):
                 stop_price = max(stop_price, levels["stop_above"])
-            # Take-profit at tp_r x risk distance (bank steady winners).
-            risk_dist = abs(price - stop_price)
-            target_price = (
-                price + tp_r * risk_dist if action == "BUY"
-                else price - tp_r * risk_dist
-            )
+            # Take-profit: fixed % if set, otherwise tp_r x risk distance.
+            if tp_pct:
+                target_price = (
+                    price * (1 + tp_pct / 100) if action == "BUY"
+                    else price * (1 - tp_pct / 100)
+                )
+            else:
+                risk_dist = abs(price - stop_price)
+                target_price = (
+                    price + tp_r * risk_dist if action == "BUY"
+                    else price - tp_r * risk_dist
+                )
 
             rd = risk.check_entry(
                 state=state, side=action, price=price, stop_price=stop_price,
@@ -324,7 +338,11 @@ def run_backtest(
     pressure_total = buy_bars + sell_bars
 
     from .metrics import compute_metrics
-    perf = compute_metrics(equity_curve, trades, start_equity)
+    perf = compute_metrics(
+        equity_curve, trades, start_equity,
+        target_low=(overrides or {}).get("target_low", 2.0) or 2.0,
+        target_high=(overrides or {}).get("target_high", 5.0) or 5.0,
+    )
 
     return BacktestResult(
         ticker=ticker,

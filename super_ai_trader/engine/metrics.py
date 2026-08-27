@@ -30,7 +30,9 @@ def trade_pnl_returns(trades):
     return [t.pnl for t in trades if t.side == "EXIT"]
 
 
-def compute_metrics(equity_curve, trades, start_equity: float, bars_per_period: int = 21) -> dict:
+def compute_metrics(equity_curve, trades, start_equity: float,
+                    bars_per_period: int = 21,
+                    target_low: float = 2.0, target_high: float = 5.0) -> dict:
     monthly = _period_returns(equity_curve, bars_per_period)
     pnls = trade_pnl_returns(trades)
 
@@ -73,5 +75,6 @@ def compute_metrics(equity_curve, trades, start_equity: float, bars_per_period: 
         "profit_factor": round(profit_factor, 2),
         "avg_win": round(avg_win, 2),
         "avg_loss": round(avg_loss, 2),
-        "in_target_band": 2.0 <= avg_month * 100 <= 5.0,
+        "in_target_band": target_low <= avg_month * 100 <= target_high,
+        "target_band": (target_low, target_high),
     }

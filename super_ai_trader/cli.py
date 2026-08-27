@@ -86,12 +86,31 @@ def cmd_learn(args) -> None:
 
 
 def cmd_backtest(args) -> None:
-    cfg = RiskConfig(allow_shorts=not args.long_only) if args.long_only else None
+    cfg = RiskConfig(allow_shorts=False) if args.long_only else None
     tickers = [t.strip() for t in args.ticker.split(",") if t.strip()]
+
+    # Manual percentage overrides take precedence over the profile.
+    overrides = {
+        "risk_per_trade_pct": args.risk_per_trade,
+        "max_position_pct": args.max_position,
+        "daily_loss_limit_pct": args.daily_loss,
+        "take_profit_r_multiple": args.take_profit_r,
+        "take_profit_pct": args.take_profit_pct,
+        "target_low": args.target_low,
+        "target_high": args.target_high,
+    }
+    overrides = {k: v for k, v in overrides.items() if v is not None}
+
+    tp_desc = (f"TP {args.take_profit_pct}%" if args.take_profit_pct is not None
+               else f"TP {args.take_profit_r}R" if args.take_profit_r is not None else "TP 1.5R")
     print(f"\nSuper-AI-Trader  |  profile={args.profile}  |  "
           f"data={'real(yfinance)' if args.real else 'synthetic'}  "
           f"|  LLM={'on' if args.llm else 'off'}  |  order-flow={'on' if not args.no_orderflow else 'off'}  "
-          f"|  learned={'on' if not args.no_learned else 'off'}  |  cost={args.cost}%/side\n")
+          f"|  learned={'on' if not args.no_learned else 'off'}  |  cost={args.cost}%/side\n"
+          f"  Manual: risk/trade={args.risk_per_trade if args.risk_per_trade else 'profile'}%  "
+          f"maxPos={args.max_position if args.max_position else 'profile'}%  "
+          f"dailyStop={args.daily_loss if args.daily_loss else 'profile'}%  {tp_desc}  "
+          f"target={args.target_low if args.target_low else 2}-{args.target_high if args.target_high else 5}%/mo\n")
     for ticker in tickers:
         res = run_backtest(
             ticker=ticker,
@@ -105,6 +124,7 @@ def cmd_backtest(args) -> None:
             use_learned=not args.no_learned,
             cost_per_side_pct=args.cost,
             horizon=args.horizon,
+            overrides=overrides,
             verbose=args.verbose,
         )
         print(res.summary())
@@ -142,6 +162,22 @@ def main() -> None:
     p_bt.add_argument("--no-learned", action="store_true", help="disable the learned ML agent")
     p_bt.add_argument("--cost", type=float, default=0.1, help="trading cost %% per side (default 0.1)")
     p_bt.add_argument("--horizon", type=int, default=5, help="bars ahead the model predicts")
+
+    # Manual percentage overrides.
+    p_bt.add_argument("--risk-per-trade", type=float, default=None,
+                      help="%% of equity risked to the stop (steady default 0.5)")
+    p_bt.add_argument("--max-position", type=float, default=None,
+                      help="max notional of equity in one position %% (steady default 15)")
+    p_bt.add_argument("--daily-loss", type=float, default=None,
+                      help="daily loss kill-switch %% (steady default 1.5)")
+    p_bt.add_argument("--take-profit-r", type=float, default=None,
+                      help="take-profit as reward:risk multiple (steady default 1.5)")
+    p_bt.add_argument("--take-profit-pct", type=float, default=None,
+                      help="fixed take-profit %% (overrides --take-profit-r)")
+    p_bt.add_argument("--target-low", type=float, default=None,
+                      help="lower monthly target %% (default 2)")
+    p_bt.add_argument("--target-high", type=float, default=None,
+                      help="upper monthly target %% (default 5)")
     p_bt.set_defaults(func=cmd_backtest)
 
     p_an = sub.add_parser("analyze", parents=[common], help="show buying/selling pressure, buy/sell zones, and AI-firm decision")

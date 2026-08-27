@@ -71,6 +71,29 @@ python3 -m super_ai_trader backtest --ticker BTC --profile steady
 python3 -m super_ai_trader backtest --ticker BTC --profile aggressive   # comparison
 ```
 
+### Manually adjust every percentage
+
+All key percentages are overridable on the command line (flags beat the profile):
+
+| Flag | Meaning | Steady default |
+|------|---------|----------------|
+| `--risk-per-trade %` | equity risked to the stop per trade | 0.5 |
+| `--max-position %` | max notional in one position | 15 |
+| `--daily-loss %` | daily loss kill-switch | 1.5 |
+| `--take-profit-r X` | take-profit reward:risk multiple | 1.5 |
+| `--take-profit-pct %` | fixed % profit target (overrides R) | none |
+| `--target-low %` / `--target-high %` | monthly target band for the check | 2 / 5 |
+| `--cost %` | trading cost per side | 0.1 |
+
+```bash
+# Example: slightly more aggressive steady tuning
+python3 -m super_ai_trader backtest --ticker BTC --risk-per-trade 0.75 \
+    --max-position 20 --daily-loss 2 --take-profit-r 2 --target-low 2 --target-high 6
+```
+
+> ⚠️ Watch the **profit factor** and **costs**, not win rate. A small fixed take-profit
+> with frequent trading can show a high win % but lose money once costs are included.
+
 > On random synthetic data the steady profile correctly produces near-flat returns with
 > sub-1.5% drawdowns and a profit factor >1 — i.e. it does not *manufacture* fake yield.
 > Hitting a real 2–5%/mo requires genuine edge from live order-flow/tick data and

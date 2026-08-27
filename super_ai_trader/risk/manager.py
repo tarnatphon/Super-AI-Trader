@@ -27,6 +27,7 @@ class RiskConfig:
     bear_size_scale: float = 0.6         # shrink shorts in bear / longs reduced
     allow_shorts: bool = True
     take_profit_r_multiple: float = 1.5  # take profit at 1.5R (bank steady winners)
+    take_profit_pct: float | None = None  # fixed % profit target (overrides R multiple)
 
     @classmethod
     def steady(cls):
