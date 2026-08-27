@@ -121,6 +121,30 @@ HTML = r"""<!doctype html>
     <div id="chat" style="margin-top:14px"></div>
   </div>
 
+  <!-- LIVE MARKET CHART -->
+  <div class="card">
+    <h2>📈 Live market</h2>
+    <p class="help">Real Binance/Gate.io prices with EMA 7 / 25 / 99 (like your trading app).
+      Shows practice data here if the live feed isn't connected.</p>
+    <div class="row">
+      <div><label>Coin</label>
+        <select id="mk_coin" onchange="loadMarket()">
+          <option>BTC</option><option>ETH</option><option selected>BNB</option><option>SOL</option><option>DOGE</option>
+        </select>
+      </div>
+      <div><label>Timeframe</label>
+        <select id="mk_tf" onchange="loadMarket()">
+          <option value="15m">15m</option><option value="1h" selected>1h</option>
+          <option value="4h">4h</option><option value="1d">1d</option>
+        </select>
+      </div>
+    </div>
+    <div class="fine" id="mk_src" style="margin:8px 0"></div>
+    <div class="big" id="mk_price" style="font-size:28px">–</div>
+    <svg id="marketChart" viewBox="0 0 600 220"></svg>
+    <div class="fine" id="mk_pressure"></div>
+  </div>
+
   <!-- STEP CARD -->
   <div class="card" id="setupCard">
     <h2>1️⃣ Pick your coin</h2>
@@ -697,6 +721,43 @@ async function loadChecklist(){
 }
 loadChecklist();
 refreshPresets();
+loadMarket();
+
+async function loadMarket(){
+  const body={exchange:'binance', ticker:document.getElementById('mk_coin').value,
+    timeframe:document.getElementById('mk_tf').value, limit:400};
+  const m=await post('/api/market', body);
+  document.getElementById('mk_src').textContent='Source: '+m.source;
+  const chg=m.change_pct;
+  document.getElementById('mk_price').innerHTML = m.last+'  '
+    +`<span class="${chg>=0?'up':'down'}" style="font-size:20px">${chg>=0?'+':''}${chg}%</span>`;
+  drawMarket(m);
+  document.getElementById('mk_pressure').textContent = m.pressure
+    ? `Live humans: ${m.pressure} · ${Math.round((m.buy_ratio||0.5)*100)}% buying vs ${Math.round((m.sell_ratio||0.5)*100)}% selling`
+    : '';
+}
+function drawMarket(m){
+  const svg=document.getElementById('marketChart'); svg.innerHTML='';
+  const W=600,H=210,pad=30;
+  const series=[m.closes.filter(x=>x!=null), m.ema99.filter(x=>x!=null),
+    m.ema25.filter(x=>x!=null), m.ema7.filter(x=>x!=null)];
+  const all=m.closes.concat(m.ema7).concat(m.ema25).concat(m.ema99).filter(x=>x!=null);
+  const min=Math.min(...all),max=Math.max(...all),rng=(max-min)||1;
+  const N=m.closes.length;
+  const X=i=>pad+i*(W-2*pad)/Math.max(1,N-1);
+  const Y=v=>H-pad-(v-min)/rng*(H-2*pad);
+  function line(arr,col,w){
+    let d='',started=false;
+    arr.forEach((v,i)=>{ if(v==null)return; d+=(started?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; started=true; });
+    return `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w}"/>`;
+  }
+  svg.innerHTML =
+    line(m.ema99,'#b48cff',1.4)+line(m.ema25,'#ff4dd2',1.6)+line(m.ema7,'#ffd54a',1.8)+
+    line(m.closes,'#7fd3ff',2.4)+
+    `<text x="${pad}" y="16" fill="#ffd54a" font-size="12">EMA 7</text>`+
+    `<text x="${pad+64}" y="16" fill="#ff4dd2" font-size="12">EMA 25</text>`+
+    `<text x="${pad+138}" y="16" fill="#b48cff" font-size="12">EMA 99</text>`;
+}
 </script>
 </body>
 </html>

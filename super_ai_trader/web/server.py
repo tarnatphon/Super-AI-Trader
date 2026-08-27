@@ -35,6 +35,49 @@ def _real_bars(exchange_id: str, symbol: str, timeframe: str = "1h", limit: int 
     return conn.ohlcv(symbol, timeframe=timeframe, limit=limit)
 
 
+def _market(payload: dict) -> dict:
+    """Real exchange candles + EMA 7/25/99 for the live market chart."""
+    from ..data.indicators import closes, ema
+    from ..data.live_behavior import live_behavior
+    exchange = payload.get("exchange", "binance")
+    ticker = payload.get("ticker", "BTC")
+    symbol = f"{ticker}/USDT"
+    timeframe = payload.get("timeframe", "1h")
+    limit = int(payload.get("limit", 400))
+    source = f"LIVE {exchange} {symbol} {timeframe}"
+    try:
+        bars = _real_bars(exchange, symbol, timeframe=timeframe, limit=limit)
+        if len(bars) < 30:
+            raise RuntimeError("not enough candles")
+    except Exception as e:
+        bars = get_series(ticker, days=300, real=False)
+        source = f"practice data (live feed unavailable: install ccxt + internet; {type(e).__name__})"
+    c = closes(bars)
+    # downsample to a chart-friendly length
+    n = len(c)
+    step = max(1, n // 150)
+    def ds(vals):
+        out = vals[::step]
+        return [round(v, 6) if v is not None else None for v in out]
+    e7, e25, e99 = ema(c, 7), ema(c, 25), ema(c, 99)
+    try:
+        beh = live_behavior(exchange, symbol, bars=bars)
+    except Exception:
+        beh = None
+    return {
+        "source": source,
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "last": round(c[-1], 6),
+        "change_pct": round((c[-1] / c[0] - 1) * 100, 2),
+        "closes": ds(c),
+        "ema7": ds(e7), "ema25": ds(e25), "ema99": ds(e99),
+        "pressure": beh.get("pressure") if beh else None,
+        "buy_ratio": beh.get("buy_ratio") if beh else None,
+        "sell_ratio": beh.get("sell_ratio") if beh else None,
+    }
+
+
 def _simulate(payload: dict) -> dict:
     ticker = payload.get("ticker", "BTC")
     investment = float(payload.get("investment", 10_000))
@@ -385,7 +428,9 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length) or b"{}")
         except Exception:
             payload = {}
-        if u.path == "/api/simulate":
+        if u.path == "/api/market":
+            self._send(_market(payload))
+        elif u.path == "/api/simulate":
             self._send(_simulate(payload))
         elif u.path == "/api/autoset":
             self._send(_autoset(payload))
