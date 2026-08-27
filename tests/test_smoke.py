@@ -136,6 +136,32 @@ def test_backtest_includes_learning_and_orderflow():
     assert res.model_metrics is None or 0 <= res.model_metrics["accuracy"] <= 1
 
 
+def test_grid_basic_run_and_accounting():
+    from super_ai_trader.data.market import make_synthetic_series
+    from super_ai_trader.grid.engine import GridConfig, simulate_on_bars, grid_lines, GridTrader
+    bars = make_synthetic_series("BTC", days=600, seed=11)
+    cfg = GridConfig(symbol="BTC/USDT", grids=20, mode="geometric",
+                     investment=10_000, fee_pct=0.1, range_pct=15)
+    lines = grid_lines(cfg, bars[0].close)
+    assert len(lines) == 21 and lines[0] < lines[-1]
+    res = simulate_on_bars(cfg, bars)
+    assert res.initial == 10_000
+    assert res.final_equity > 0
+    assert res.fees_paid >= 0
+    assert res.filled_round_trips >= 0
+    # Equity = cash + inventory value, should reconcile near investment scale.
+    assert abs((res.final_equity - res.initial) -
+               (res.grid_profit + res.unrealized_pnl)) < 5.0
+    # Exchange picker only allows binance/gateio.
+    GridTrader("binance", paper=True)
+    GridTrader("gateio", paper=True)
+    try:
+        GridTrader("bybit", paper=True)
+        assert False, "should reject unsupported exchange"
+    except ValueError:
+        pass
+
+
 def test_steady_profile_has_tighter_risk_and_perf_metrics():
     from super_ai_trader.risk.manager import RiskConfig
     steady = RiskConfig.steady()

@@ -20,7 +20,13 @@ python3 -m super_ai_trader backtest --ticker AAPL,MSFT,NVDA --real
 
 # real LLM agents (optional): export OPENAI_API_KEY=...  or point at local Ollama
 python3 -m super_ai_trader analyze --ticker AAPL --real --llm
+
+# spot grid bot simulation (Binance primary / Gate.io secondary; CCXT live later)
+python3 -m super_ai_trader grid --ticker BTC --exchange binance --range-pct 15 --grids 25
 ```
+
+Grid trading (Binance vs Gate.io choice, fees, risk): see
+**[docs/GRID-TRADING.md](docs/GRID-TRADING.md)**.
 
 ## How it works
 

@@ -53,6 +53,32 @@ def cmd_analyze(args) -> None:
         print("\n" + json.dumps(decision, indent=2, default=str))
 
 
+def cmd_grid(args) -> None:
+    from .grid.engine import GridConfig, simulate_on_bars
+    from .data.market import get_series
+    bars = get_series(args.ticker, days=args.days, real=args.real)
+    ref = bars[0].close
+
+    # Auto range from reference price when bounds not given.
+    cfg = GridConfig(
+        symbol=f"{args.ticker}/USDT",
+        lower=args.lower or ref * (1 - args.range_pct / 100),
+        upper=args.upper or ref * (1 + args.range_pct / 100),
+        grids=args.grids,
+        mode=args.mode,
+        investment=args.investment,
+        fee_pct=args.fee,
+        range_pct=args.range_pct,
+        stop_loss_price=args.stop_loss,
+        take_profit_price=args.take_profit,
+    )
+    print(f"\nGRID  {cfg.symbol}  exchange={args.exchange}  mode={cfg.mode}  grids={cfg.grids}")
+    print(f"  range {cfg.lower:,.2f} – {cfg.upper:,.2f}  "
+          f"(ref {ref:,.2f}, ±{args.range_pct}%)  investment {cfg.investment:,.0f}  fee {cfg.fee_pct}%/side")
+    res = simulate_on_bars(cfg, bars)
+    print(res.summary())
+
+
 def cmd_learn(args) -> None:
     from .learning.train import train_for_ticker
     tickers = [t.strip() for t in args.ticker.split(",") if t.strip()]
@@ -189,6 +215,20 @@ def main() -> None:
     p_le.add_argument("--horizon", type=int, default=5, help="bars ahead to predict")
     p_le.add_argument("--save", default=None, help="optional path to save the trained model JSON")
     p_le.set_defaults(func=cmd_learn)
+
+    p_g = sub.add_parser("grid", parents=[common], help="simulate/run a spot grid bot (binance or gate.io)")
+    p_g.add_argument("--exchange", choices=["binance", "gateio"], default="binance",
+                     help="venue for fee/live profile (grid runs the same; binance default)")
+    p_g.add_argument("--lower", type=float, default=None, help="grid bottom price")
+    p_g.add_argument("--upper", type=float, default=None, help="grid top price")
+    p_g.add_argument("--range-pct", type=float, default=10.0, help="auto range ±%% from price")
+    p_g.add_argument("--grids", type=int, default=20, help="number of grid lines")
+    p_g.add_argument("--mode", choices=["arithmetic", "geometric"], default="geometric")
+    p_g.add_argument("--investment", type=float, default=10_000.0)
+    p_g.add_argument("--fee", type=float, default=0.1, help="maker fee %% per side")
+    p_g.add_argument("--stop-loss", type=float, default=None)
+    p_g.add_argument("--take-profit", type=float, default=None)
+    p_g.set_defaults(func=cmd_grid)
 
     args = parser.parse_args()
     args.func(args)
