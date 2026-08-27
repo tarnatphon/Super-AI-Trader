@@ -31,11 +31,14 @@ data → indicators → [technical · momentum · sentiment · fundamental · ri
      → backtest / paper / live engine
 ```
 
-See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for full details and
-**[docs/RESEARCH-top-ai-traders-2026.md](docs/RESEARCH-top-ai-traders-2026.md)** for
-the research behind the design (top platforms, open-source frameworks, and creators
-surveyed: Trade Ideas, TradingAgents, ai-hedge-fund, FinRL, Freqtrade, Moon Dev,
-Part Time Larry, Kevin Davey, and more).
+See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for full details and the research
+behind the design:
+- **[docs/RESEARCH-top-ai-traders-2026.md](docs/RESEARCH-top-ai-traders-2026.md)** — top
+  platforms, open-source frameworks, and creators (Trade Ideas, TradingAgents,
+  ai-hedge-fund, FinRL, Freqtrade, Moon Dev, Kevin Davey, …).
+- **[docs/RESEARCH-deep-dive-2026.md](docs/RESEARCH-deep-dive-2026.md)** — does AI
+  trading actually make money, where LLMs have real edge (academic evidence), costs,
+  retail-accessible edges, backtesting pitfalls, and **Thailand regulation/brokers/tax**.
 
 ## Tests
 
