@@ -117,9 +117,25 @@ class LiveSession:
             ticks = list(self.ticks)
             fills = list(self.fill_log)
         price = ticks[-1]["price"] if ticks else self.start_price
-        equity = ticks[-1].get("equity") if ticks else self.cfg.investment
+        equity = None
+        try:
+            equity = self.conn.equity(price)
+        except Exception:
+            equity = self.cfg.investment
         pnl = (equity - self.cfg.investment) if equity else 0.0
         roi = (pnl / self.cfg.investment * 100) if equity else 0.0
+
+        # Trailing "smart exit" state from the live price path (watching/holding/locked).
+        trail = None
+        price_path = [t["price"] for t in ticks if t.get("price")]
+        if len(price_path) >= 5:
+            try:
+                from ..grid.trailing_visual import simulate_trailing
+                trail = simulate_trailing(price_path, arm_pct=5.0, giveback_pct=1.0)
+                trail.pop("price", None)
+                trail.pop("exit_line", None)
+            except Exception:
+                trail = None
         buys = sum(1 for f in fills if f["side"] == "buy")
         sells = sum(1 for f in fills if f["side"] == "sell")
         return {
@@ -137,6 +153,7 @@ class LiveSession:
             "open_orders": len(self.runner.orders),
             "paused": self.runner.pause_buys,
             "regime": self.regime,
+            "trail": trail,
             "lower": round(self.cfg.lower, 6),
             "upper": round(self.cfg.upper, 6),
             "grids": self.cfg.grids,

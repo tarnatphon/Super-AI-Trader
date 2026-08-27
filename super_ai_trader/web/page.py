@@ -236,6 +236,7 @@ HTML = r"""<!doctype html>
         <div class="metric"><div class="k">Equity</div><div class="v" id="lv_equity">–</div></div>
         <div class="metric"><div class="k">Buys / Sells</div><div class="v" id="lv_fills">–</div></div>
       </div>
+      <div id="liveTrailBadge" style="margin-top:10px;font-weight:800;font-size:16px"></div>
       <label style="margin-top:12px">💰 Live profit curve</label>
       <svg id="liveChart" viewBox="0 0 600 140" preserveAspectRatio="none"></svg>
       <div class="fine" id="lv_behavior"></div>
@@ -357,12 +358,25 @@ async function liveStart(){
 }
 function showRegime(r){
   const b=document.getElementById('regimeBadge');
-  if(!r.regime){ b.style.display='none'; return; }
-  const g=r.regime;
-  b.style.display='inline-block';
-  b.className = g.active ? 'regime-on' : 'regime-off';
-  b.textContent = g.active
-    ? '✅ Grid ON — '+g.reason : '⏸️ Grid PAUSED — '+g.reason;
+  if(!r.regime){ b.style.display='none'; }
+  else {
+    const g=r.regime;
+    b.style.display='inline-block';
+    b.className = g.active ? 'regime-on' : 'regime-off';
+    b.textContent = g.active ? '✅ Grid ON — '+g.reason : '⏸️ Grid PAUSED — '+g.reason;
+  }
+  // trailing smart-exit badge (works for both live and replay status objects)
+  const t=r.trail, el=document.getElementById('liveTrailBadge');
+  if(el){
+    if(!t){ el.innerHTML=''; }
+    else if(t.state==='locked'){
+      el.innerHTML='<span class="up">🔒 Smart exit LOCKED +'+t.locked_gain_pct+'% profit</span>';
+    } else if(t.state==='holding'){
+      el.innerHTML='<span style="color:#ffd54a">🟢 HOLDING for more — '+(t.current_gain_pct>=0?'+':'')+t.current_gain_pct+'% up (sells if it falls back '+(t.giveback_pct||1)+'% from peak)</span>';
+    } else {
+      el.innerHTML='<span class="flat">👀 Smart exit armed at +'+(t.arm_pct||5)+'% — protecting with stop until then</span>';
+    }
+  }
 }
 async function livePoll(){
   const r=await (await fetch('/api/live/status')).json();
