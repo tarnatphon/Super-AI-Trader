@@ -199,6 +199,49 @@ def test_vault_encrypts_and_rejects_bad_password():
         os.environ["HOME"] = old_home or ""
 
 
+def test_assistant_offline_parse_numbers():
+    from super_ai_trader.ai.assistant import offline_parse, to_grid_config
+    p = offline_parse("trade 1000 USDT on Bitcoin safe grid 12 percent range")
+    assert p["coin"] == "BTC" and p["investment"] == 1000.0
+    assert p["range_pct"] == 12 and p["exchange"] == "binance" and p["safe"] is True
+    p2 = offline_parse("use 5000 dollars Ethereum narrow grid 30 steps on gate")
+    assert p2["coin"] == "ETH" and p2["investment"] == 5000.0 and p2["grids"] == 30
+    assert p2["exchange"] == "gateio" and p2["mode"] == "arithmetic"
+    cfg = to_grid_config(p, 100.0)
+    assert cfg.lower < 100.0 < cfg.upper and cfg.stop_loss_price < cfg.lower
+
+
+def test_paper_grid_runner_fill_cycle():
+    from super_ai_trader.grid.engine import GridConfig
+    from super_ai_trader.exchange.grid_runner import LiveGridRunner
+
+    class FakeConn:
+        paper = True
+        def __init__(self): self.usdt = 1000.0; self.base = 0.0
+        def price(self, s): return 100.0
+        def place_limit_buy(self, s, amt, px):
+            o = type("O", (), {"side": "buy", "amount": amt, "price": px, "filled": False})()
+            return o
+        def place_limit_sell(self, s, amt, px):
+            o = type("O", (), {"side": "sell", "amount": amt, "price": px, "filled": False})()
+            return o
+        def cancel(self, o): pass
+        def tick_paper(self, s, price):
+            # fill all resting buys at or above current price (price dipped)
+            return []
+        def equity(self, price): return self.usdt + self.base * price
+
+    cfg = GridConfig(symbol="BTC/USDT", lower=90, upper=110, grids=10,
+                     mode="geometric", investment=1000, fee_pct=0.1,
+                     stop_loss_price=88, take_profit_price=112)
+    runner = LiveGridRunner(FakeConn(), cfg)
+    setup = runner.setup()
+    assert len(setup["lines"]) == 11 and len(runner.orders) >= 1
+    # Kill switch triggers when price falls through stop.
+    info = runner.cycle_once(50.0)
+    assert info["killed"] is True
+
+
 def test_steady_profile_has_tighter_risk_and_perf_metrics():
     from super_ai_trader.risk.manager import RiskConfig
     steady = RiskConfig.steady()

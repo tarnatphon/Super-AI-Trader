@@ -53,6 +53,65 @@ def cmd_analyze(args) -> None:
         print("\n" + json.dumps(decision, indent=2, default=str))
 
 
+def cmd_talk(args) -> None:
+    from .ai.assistant import interpret, to_grid_config, explain
+    from .grid.engine import simulate_on_bars
+    from .data.market import get_series
+    text = " ".join(args.request)
+    parsed = interpret(text)
+    print("\n🤖 " + explain(parsed) + "\n")
+    # Use live recent candles if ccxt + internet work, else synthetic bars.
+    bars = None
+    try:
+        from .exchange.connector import ExchangeConnector
+        conn = ExchangeConnector(parsed["exchange"], paper=True)
+        bars = conn.ohlcv(parsed["symbol"], timeframe="1h", limit=600)
+        print(f"Loaded {len(bars)} live {parsed['exchange']} candles for {parsed['symbol']}.")
+    except Exception as e:
+        print(f"(Live exchange feed unavailable: {e} — using practice data.)")
+    bars = bars or get_series(parsed["coin"], days=600)
+    cfg = to_grid_config(parsed, bars[0].close)
+    res = simulate_on_bars(cfg, bars)
+    print(res.summary())
+
+
+def cmd_paper(args) -> None:
+    from .exchange.connector import ExchangeConnector
+    from .exchange.grid_runner import LiveGridRunner
+    from .ai.assistant import interpret, to_grid_config
+    ex = args.exchange
+    symbol = args.symbol
+    cfg = None
+    if args.request:
+        parsed = interpret(" ".join(args.request))
+        ex = parsed["exchange"]
+        symbol = parsed["symbol"]
+        conn0 = ExchangeConnector(ex, paper=True)
+        try:
+            ref = conn0.price(symbol)
+        except Exception as e:
+            print(f"Cannot reach {ex}: {e}")
+            return
+        cfg = to_grid_config(parsed, ref)
+    else:
+        from .grid.engine import GridConfig
+        conn0 = ExchangeConnector(ex, paper=True)
+        try:
+            ref = conn0.price(symbol)
+        except Exception as e:
+            print(f"Cannot reach {ex}: {e}")
+            return
+        cfg = GridConfig(symbol=symbol, range_pct=args.range_pct,
+                         grids=args.grids, mode="geometric",
+                         investment=args.investment, fee_pct=0.1,
+                         stop_loss_price=ref * (1 - args.range_pct * 2 / 100),
+                         take_profit_price=ref * (1 + args.range_pct * 2 / 100))
+    conn = ExchangeConnector(ex, paper=True, paper_usdt=cfg.investment)
+    runner = LiveGridRunner(conn, cfg)
+    print(f"\nPAPER grid on {ex} {cfg.symbol} (practice money, live prices).\n")
+    runner.run(poll_seconds=args.poll, max_loops=args.loops)
+
+
 def cmd_grid(args) -> None:
     from .grid.engine import GridConfig, simulate_on_bars
     from .data.market import get_series
@@ -237,6 +296,21 @@ def main() -> None:
         from .web.server import run
         run(host=args.host, port=args.port)
     p_w.set_defaults(func=_web)
+
+    p_p = sub.add_parser("paper", help="paper-trade a live grid against real exchange prices (no orders sent)")
+    p_p.add_argument("--exchange", choices=["binance", "gateio"], default="binance")
+    p_p.add_argument("--symbol", default="BTC/USDT")
+    p_p.add_argument("--range-pct", type=float, default=12)
+    p_p.add_argument("--grids", type=int, default=25)
+    p_p.add_argument("--investment", type=float, default=1000)
+    p_p.add_argument("--poll", type=float, default=15, help="seconds between price polls")
+    p_p.add_argument("--loops", type=int, default=None, help="stop after N polls (default: run)")
+    p_p.add_argument("request", nargs="*", help="optional plain-language request instead of flags")
+    p_p.set_defaults(func=cmd_paper)
+
+    p_t = sub.add_parser("talk", help="tell the local AI what you want in plain words")
+    p_t.add_argument("request", nargs="+", help='e.g. "trade 1000 USDT on Bitcoin safe grid 12 percent"')
+    p_t.set_defaults(func=cmd_talk)
 
     args = parser.parse_args()
     args.func(args)
