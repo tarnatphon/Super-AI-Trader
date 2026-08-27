@@ -50,6 +50,7 @@ class GridResult:
     stopped: bool
     final_equity: float
     initial: float = 0.0
+    equity_curve: list = field(default_factory=list)
 
     def summary(self) -> str:
         ret = (self.final_equity / self.initial - 1) * 100 if self.initial else 0.0
@@ -134,14 +135,22 @@ def simulate_on_bars(cfg: GridConfig, bars) -> GridResult:
         if p <= start_price:
             buy_slot(k, min(p, start_price))
 
+    equity_curve = []
+
+    def mark_equity(price, date):
+        inv_val = sum(slot_qty[k] * price for k in slot_qty)
+        equity_curve.append((date, round(cash + inv_val, 2)))
+
     for bar in bars:
         lo, hi = bar.low, bar.high
         # Stop loss / take profit at grid level.
         if cfg.stop_loss_price and lo <= cfg.stop_loss_price:
             stopped = True
+            mark_equity(cfg.stop_loss_price, bar.date)
             break
         if cfg.take_profit_price and hi >= cfg.take_profit_price:
             stopped = True
+            mark_equity(cfg.take_profit_price, bar.date)
             break
 
         # If price dipped to a buy line -> buy that slot.
@@ -155,6 +164,11 @@ def simulate_on_bars(cfg: GridConfig, bars) -> GridResult:
             if hi >= sell_price and slot_qty[k] > 0:
                 sell_slot(k, sell_price)
                 touches += 1
+        mark_equity(bar.close, bar.date)
+
+    # If stopped out, mark at the trigger price instead of last bar close.
+    if stopped:
+        end_price = cfg.stop_loss_price or cfg.take_profit_price or end_price
 
     # Mark remaining inventory at end price.
     inv_base = sum(slot_qty.values())
@@ -165,6 +179,8 @@ def simulate_on_bars(cfg: GridConfig, bars) -> GridResult:
     # proceeds and fees) plus held inventory marked to market.
     final_equity = cash + inv_value
     realized = final_equity - cfg.investment - unrealized
+    if equity_curve:
+        equity_curve[-1] = (equity_curve[-1][0], round(final_equity, 2))
 
     return GridResult(
         symbol=cfg.symbol,
@@ -180,6 +196,7 @@ def simulate_on_bars(cfg: GridConfig, bars) -> GridResult:
         stopped=stopped,
         final_equity=round(final_equity, 2),
         initial=cfg.investment,
+        equity_curve=equity_curve,
     )
 
 

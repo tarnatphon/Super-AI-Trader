@@ -162,6 +162,43 @@ def test_grid_basic_run_and_accounting():
         pass
 
 
+def test_grid_autoset_advisor_picks_params():
+    from super_ai_trader.data.market import make_synthetic_series
+    from super_ai_trader.grid.advisor import advise, plain_language
+    bars = make_synthetic_series("BTC", days=600, seed=21)
+    adv = advise(bars, investment=1000)
+    assert adv["config"].lower < adv["config"].upper
+    assert adv["config"].mode in ("arithmetic", "geometric")
+    assert adv["config"].grids >= 5
+    lines = plain_language(adv)
+    assert len(lines) >= 4 and all(isinstance(x, str) for x in lines)
+
+
+def test_vault_encrypts_and_rejects_bad_password():
+    import tempfile, os
+    from super_ai_trader.security.vault import Vault
+    # use an isolated HOME so the test doesn't touch the real vault
+    tmp = tempfile.mkdtemp()
+    old_home = os.environ.get("HOME")
+    os.environ["HOME"] = tmp
+    try:
+        v = Vault()
+        v.store("t", "binance", "AKIA1234567890", "s3cr3tsecretvalue", "goodpass")
+        import json
+        path = [f for f in os.listdir(os.path.join(tmp, ".super-ai-trader"))][0]
+        blob = open(os.path.join(tmp, ".super-ai-trader", path)).read()
+        assert "s3cr3t" not in blob and "AKIA1234" not in blob  # encrypted
+        try:
+            v.load("t", "badpass")
+            assert False, "bad password should fail"
+        except ValueError:
+            pass
+        d = v.load("t", "goodpass")
+        assert d["api_secret"] == "s3cr3tsecretvalue"
+    finally:
+        os.environ["HOME"] = old_home or ""
+
+
 def test_steady_profile_has_tighter_risk_and_perf_metrics():
     from super_ai_trader.risk.manager import RiskConfig
     steady = RiskConfig.steady()

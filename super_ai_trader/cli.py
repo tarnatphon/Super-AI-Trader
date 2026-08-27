@@ -230,6 +230,14 @@ def main() -> None:
     p_g.add_argument("--take-profit", type=float, default=None)
     p_g.set_defaults(func=cmd_grid)
 
+    p_w = sub.add_parser("web", help="launch the simple, secure local dashboard")
+    p_w.add_argument("--port", type=int, default=8787)
+    p_w.add_argument("--host", default="127.0.0.1", help="localhost only by default")
+    def _web(args):
+        from .web.server import run
+        run(host=args.host, port=args.port)
+    p_w.set_defaults(func=_web)
+
     args = parser.parse_args()
     args.func(args)
 

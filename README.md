@@ -23,7 +23,13 @@ python3 -m super_ai_trader analyze --ticker AAPL --real --llm
 
 # spot grid bot simulation (Binance primary / Gate.io secondary; CCXT live later)
 python3 -m super_ai_trader grid --ticker BTC --exchange binance --range-pct 15 --grids 25
+
+# simple, secure local web app (kid- and senior-friendly; localhost only)
+python3 -m super_ai_trader web        # then open http://127.0.0.1:8787
 ```
+
+📱 **Simple web dashboard** (original design, practice mode default, "Safety Shield"):
+see **[docs/SECURITY-UX.md](docs/SECURITY-UX.md)**.
 
 Grid trading (Binance vs Gate.io choice, fees, risk): see
 **[docs/GRID-TRADING.md](docs/GRID-TRADING.md)**.
