@@ -240,8 +240,7 @@ def _preset_list() -> dict:
 
 def _preset_load(name: str) -> dict:
     from ..settings import load_preset
-    r = load_preset(name)
-    return r if r.get("ok") is not None or "error" not in r else r
+    return load_preset(name)
 
 
 def _autotune(payload: dict) -> dict:
@@ -365,6 +364,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send({"ccxt": _exchanges_ok()})
         elif u.path == "/api/preset/list":
             self._send(_preset_list())
+        elif u.path == "/api/preset/load":
+            q = parse_qs(u.query)
+            self._send(_preset_load((q.get("name") or [""])[0]))
         elif u.path == "/api/live/stop":
             self._send(_live_stop())
         else:
@@ -403,11 +405,6 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_autotune(payload))
         elif u.path == "/api/preset/save":
             self._send(_preset_save(payload))
-        elif u.path == "/api/preset/list":
-            self._send(_preset_list())
-        elif u.path == "/api/preset/load":
-            q = parse_qs(urlparse(u.path).query)
-            self._send(_preset_load((q.get("name") or [""])[0]))
         else:
             self._send({"error": "not found"}, 404)
 
