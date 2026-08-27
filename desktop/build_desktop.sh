@@ -7,6 +7,8 @@
 #
 set -e
 cd "$(dirname "$0")/.."
+# Generate app.ico / app.icns / app.png first (stdlib, no deps).
+python3 desktop/make_icon.py
 python3 -m pip install --user pyinstaller || pip3 install pyinstaller
 python3 -m PyInstaller --noconfirm desktop/Super-AI-Trader.spec \
   || pyinstaller --noconfirm desktop/Super-AI-Trader.spec

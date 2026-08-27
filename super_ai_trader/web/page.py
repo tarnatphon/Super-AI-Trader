@@ -11,6 +11,7 @@ HTML = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Super-AI-Trader</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%2329c484'/><path d='M22 66 L42 50 L58 58 L78 34' fill='none' stroke='white' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/><circle cx='78' cy='34' r='6' fill='white'/></svg>">
 <style>
   :root{
     --bg:#0e1420; --card:#161f2e; --card2:#1c2839; --line:#26324a;
@@ -687,6 +688,7 @@ async function autoTune(){
     +r.explanation.split('\n').join('<br>• ')
     +'<br><br><b>Apply it?</b> Arm after <b>'+b.arm_pct+'%</b>, give back <b>'
     +b.giveback_pct+'%</b> from the peak. (You can still use --trail-arm / --trail-giveback.)';
+}
 async function connect(){
   const body={exchange:document.getElementById('ex').value,name:document.getElementById('cname').value,
     api_key:document.getElementById('apikey').value,api_secret:document.getElementById('apisecret').value,
