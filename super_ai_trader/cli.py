@@ -192,6 +192,8 @@ def cmd_backtest(args) -> None:
         "daily_loss_limit_pct": args.daily_loss,
         "take_profit_r_multiple": args.take_profit_r,
         "take_profit_pct": args.take_profit_pct,
+        "trailing_arm_pct": args.trail_arm,
+        "trailing_giveback_pct": args.trail_giveback,
         "target_low": args.target_low,
         "target_high": args.target_high,
     }
@@ -274,6 +276,10 @@ def main() -> None:
                       help="lower monthly target %% (default 2)")
     p_bt.add_argument("--target-high", type=float, default=None,
                       help="upper monthly target %% (default 5)")
+    p_bt.add_argument("--trail-arm", type=float, default=None,
+                      help="trailing profit arms after +%% (default 5)")
+    p_bt.add_argument("--trail-giveback", type=float, default=None,
+                      help="exit if price retraces %% from peak (default 1)")
     p_bt.set_defaults(func=cmd_backtest)
 
     p_an = sub.add_parser("analyze", parents=[common], help="show buying/selling pressure, buy/sell zones, and AI-firm decision")

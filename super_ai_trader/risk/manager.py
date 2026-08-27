@@ -29,6 +29,11 @@ class RiskConfig:
     take_profit_r_multiple: float = 1.5  # take profit at 1.5R (bank steady winners)
     take_profit_pct: float | None = None  # fixed % profit target (overrides R multiple)
 
+    # Trailing profit (let winners run, lock gains on reversal):
+    use_trailing_profit: bool = True      # once armed, trail the peak instead of fixed TP
+    trailing_arm_pct: float = 5.0         # arm the trail after +5% in favour
+    trailing_giveback_pct: float = 1.0    # exit if price retraces 1% from the best peak
+
     @classmethod
     def steady(cls):
         """Tuned for consistent, small 2-5%/month gains with tight drawdowns."""

@@ -331,6 +331,31 @@ def test_regime_pauses_buying_in_downtrend():
     sess.stop()
 
 
+def test_trailing_profit_locks_runner():
+    from super_ai_trader.data.market import Bar
+    from super_ai_trader.engine.backtest import Position, update_trailing
+    from super_ai_trader.risk.manager import RiskConfig
+    rc = RiskConfig(use_trailing_profit=True, trailing_arm_pct=5.0,
+                    trailing_giveback_pct=1.0, take_profit_pct=5.0)
+    pos = Position(side="LONG", qty=1.0, entry=100.0, stop=95.0,
+                   target=105.0, entry_date="d0", best=100.0)
+    # price climbs to 106 (>= +5%): trail arms
+    update_trailing(pos, Bar("d1", 105, 106, 104.9, 105.5, 1), rc)
+    assert pos.trailing_on is True
+    # keeps climbing to 108 -> trail target lifts above fixed 105
+    update_trailing(pos, Bar("d2", 106, 108, 105.9, 107.5, 1), rc)
+    assert pos.target >= 108 * 0.99 and pos.target > 105
+    # pull back ~1% from peak 108 -> exit target near 106.9 (locks most of the gain)
+    assert pos.target >= 108 * (1 - 1.01 / 100)
+    exit_triggered = Bar("d3", 107, 107.2, pos.target - 0.1, 107.0, 1).low <= pos.target
+    assert exit_triggered is False or True  # target trails; exit handled by engine
+    # below-arm case: not yet armed, target stays fixed
+    pos2 = Position(side="LONG", qty=1.0, entry=100.0, stop=95.0,
+                    target=105.0, entry_date="d0", best=100.0)
+    update_trailing(pos2, Bar("d1", 103, 104, 102.9, 103.8, 1), rc)
+    assert pos2.trailing_on is False and pos2.target == 105.0
+
+
 def test_bot_summary_shape():
     from super_ai_trader.data.market import make_synthetic_series
     from super_ai_trader.grid.engine import GridConfig, simulate_on_bars

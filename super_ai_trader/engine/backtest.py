@@ -22,8 +22,10 @@ class Position:
     qty: float
     entry: float
     stop: float
-    target: float           # take-profit price
+    target: float           # take-profit price (initial; trail once armed)
     entry_date: str
+    best: float = 0.0       # best price reached since entry (for trailing)
+    trailing_on: bool = False
 
 
 @dataclass
@@ -89,6 +91,31 @@ class BacktestResult:
         return s
 
 
+def update_trailing(position: Position, bar, rc) -> None:
+    """Trailing take-profit: arm after +trailing_arm_pct, then hold while price
+    keeps making new highs (lows for shorts), and trail the exit target at
+    trailing_giveback_pct from the best price — locking in a runner's profit."""
+    if not rc.use_trailing_profit:
+        return
+    if position.side == "LONG":
+        position.best = max(position.best, bar.high)
+        arm = position.entry * (1 + rc.trailing_arm_pct / 100)
+        if not position.trailing_on and position.best >= arm:
+            position.trailing_on = True
+        if position.trailing_on:
+            trail = position.best * (1 - rc.trailing_giveback_pct / 100)
+            position.target = max(position.target, trail)
+    else:
+        position.best = position.best or position.entry
+        position.best = min(position.best, bar.low)
+        arm = position.entry * (1 - rc.trailing_arm_pct / 100)
+        if not position.trailing_on and position.best <= arm:
+            position.trailing_on = True
+        if position.trailing_on:
+            trail = position.best * (1 + rc.trailing_giveback_pct / 100)
+            position.target = min(position.target, trail) if position.target else trail
+
+
 def run_backtest(
     ticker: str = "DEMO",
     days: int = 900,
@@ -139,6 +166,7 @@ def run_backtest(
                 setattr(risk_config, k, v)
     tp_r = risk_config.take_profit_r_multiple
     tp_pct = risk_config.take_profit_pct
+    rc = risk_config  # config used by the trailing-profit logic
 
     firm = TradingFirm(use_llm=use_llm, use_orderflow=use_orderflow,
                        learned_model=model if use_learned else None)
@@ -184,9 +212,11 @@ def run_backtest(
         max_dd = max(max_dd, (peak - equity) / peak * 100)
         risk.check_day(state, equity)
 
-        # Manage open position: stop-out then take-profit (check stop first —
-        # conservative, since within one bar both could trade).
+        # Manage open position: hard stop first, then fixed target / trailing profit.
         if position:
+            # Update the best price and arm/lift the trailing take-profit.
+            update_trailing(position, bar, rc)
+
             hit_stop = (
                 (position.side == "LONG" and bar.low <= position.stop)
                 or (position.side == "SHORT" and bar.high >= position.stop)
@@ -200,7 +230,8 @@ def run_backtest(
             if hit_stop:
                 exit_reason, exit_price = "stop-out", position.stop
             elif hit_target:
-                exit_reason, exit_price = "take-profit", position.target
+                exit_reason = "trail-profit" if position.trailing_on else "take-profit"
+                exit_price = position.target
             if exit_reason:
                 notional = position.qty * exit_price
                 fee = apply_cost(notional)
