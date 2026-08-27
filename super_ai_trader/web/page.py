@@ -180,6 +180,10 @@ HTML = r"""<!doctype html>
     <svg id="profitChart" viewBox="0 0 600 140" preserveAspectRatio="none"></svg>
     <label style="margin-top:10px">🗺️ Bot preview — green buys below, red sells above (EMA 7/25/99)</label>
     <svg id="previewChart" viewBox="0 0 600 220"></svg>
+    <div id="trailBadge" style="margin-top:8px;font-weight:800;font-size:17px"></div>
+    <label style="margin-top:10px">🏃 Smart exit — lets winners run, locks profit if they reverse</label>
+    <svg id="trailChart" viewBox="0 0 600 180"></svg>
+    <div class="fine" id="trailNote"></div>
     <div class="fine" id="b_info"></div>
   </div>
 
@@ -472,7 +476,41 @@ function botDetailsData(b){
     (b.stopped?'safety stop triggered':'still running safely');
   drawProfit(b.profit_curve);
   drawPreview(b.preview);
+  drawTrail(b.trail);
   document.getElementById('botCard').scrollIntoView({behavior:'smooth'});
+}
+function drawTrail(t){
+  if(!t) return;
+  const badge=document.getElementById('trailBadge');
+  const note=document.getElementById('trailNote');
+  const price=t.price, exit=t.exit_line;
+  if(t.state==='locked'){
+    badge.innerHTML='<span class="up">🔒 LOCKED PROFIT at +'+t.locked_gain_pct+'%</span>';
+    note.textContent='Price ran up, then pulled back '+t.giveback_pct+'% from its peak — sold to bank the gain.';
+  } else if(t.state==='holding'){
+    badge.innerHTML='<span style="color:#ffd54a">🟢 HOLDING for more… '+t.current_gain_pct+'% up (exit trail at +'+t.giveback_pct+'% from peak)</span>';
+    note.textContent='Arm at +'+t.arm_pct+'% then ride the move; sells only if price falls back '+t.giveback_pct+'% from the highest point.';
+  } else {
+    badge.innerHTML='<span class="flat">👀 Watching — trail arms once price is +'+t.arm_pct+'%</span>';
+    note.textContent='Below +'+t.arm_pct+'% the smart exit stays off; normal stop protects the position.';
+  }
+  const svg=document.getElementById('trailChart'); svg.innerHTML='';
+  const W=600,H=170,pad=26;
+  const vals=price.concat(exit.filter(x=>x!=null)).concat([t.armed_at,t.entry]);
+  const min=Math.min(...vals),max=Math.max(...vals),rng=(max-min)||1;
+  const X=i=>pad+i*(W-2*pad)/Math.max(1,price.length-1);
+  const Y=v=>H-pad-(v-min)/rng*(H-2*pad);
+  let d=''; price.forEach((v,i)=>{ d+=(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; });
+  let de=''; let started=false;
+  exit.forEach((v,i)=>{ if(v==null){started=false;return;} de+=(started?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; started=true; });
+  // arm line
+  svg.innerHTML=
+    `<line x1="${pad}" y1="${Y(t.armed_at)}" x2="${W-pad}" y2="${Y(t.armed_at)}" stroke="#ffd54a" stroke-dasharray="5 5" stroke-width="1" opacity="0.6"/>`+
+    `<text x="${W-pad-150}" y="${Y(t.armed_at)-4}" fill="#ffd54a" font-size="12">arm +${t.arm_pct}%</text>`+
+    `<path d="${de}" fill="none" stroke="#ff9f43" stroke-width="2.5" stroke-dasharray="2 3"/>`+
+    `<path d="${d}" fill="none" stroke="#29c484" stroke-width="2.6"/>`+
+    `<circle cx="${X(price.length-1)}" cy="${Y(price[price.length-1])}" r="4" fill="#29c484"/>`+
+    (t.state==='locked'?`<text x="${pad+6}" y="${pad+14}" fill="#29c484" font-size="14" font-weight="800">🔒 locked</text>`:'');
 }
 function drawProfit(pts){
   const svg=document.getElementById('profitChart'); svg.innerHTML='';

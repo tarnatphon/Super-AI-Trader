@@ -368,6 +368,24 @@ def test_trailing_optimizer_picks_and_confirms():
     assert "robust" in opt["confirmation"]
 
 
+def test_trailing_visual_states():
+    from super_ai_trader.grid.trailing_visual import simulate_trailing
+    # below arm -> watching
+    s = simulate_trailing([100.0] * 20)
+    assert s["state"] == "watching" and all(x is None for x in s["exit_line"])
+    # climbs above arm then reverses ~1% from peak -> locked near the runner gain
+    up = [100 + i * 0.2 for i in range(41)]          # rises to ~108
+    down = [up[-1] - i * 0.6 for i in range(1, 8)]
+    s2 = simulate_trailing(up + down)
+    assert s2["state"] == "locked"
+    assert 5.0 < s2["locked_gain_pct"] < 8.0          # banked near ~7%
+    assert s2["current_gain_pct"] == s2["locked_gain_pct"]
+    # keeps climbing -> holding, exit line trails the peak
+    s3 = simulate_trailing([100 + i * 0.2 for i in range(60)])
+    assert s3["state"] == "holding" and s3["locked_gain_pct"] is None
+    assert any(x is not None for x in s3["exit_line"])
+
+
 def test_bot_summary_shape():
     from super_ai_trader.data.market import make_synthetic_series
     from super_ai_trader.grid.engine import GridConfig, simulate_on_bars

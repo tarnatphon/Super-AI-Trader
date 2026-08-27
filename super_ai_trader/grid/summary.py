@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from ..data.indicators import closes, ema
 from .engine import grid_lines
+from .trailing_visual import trailing_from_bars
 
 
 def bot_summary(cfg, res, bars, tail: int = 120) -> dict:
@@ -45,8 +46,12 @@ def bot_summary(cfg, res, bars, tail: int = 120) -> dict:
     curve = res.equity_curve or [(b.date, cfg.investment) for b in bars]
     curve_vals = [round(v, 2) for _d, v in curve[-t:]]
 
+    # Trailing behavior visual (climbing exit line + holding/locked state).
+    trail = trailing_from_bars(bars, arm_pct=5.0, giveback_pct=1.0, tail=120)
+
     return {
         "symbol": cfg.symbol,
+        "trail": trail,
         "mode": cfg.mode,
         "grids": cfg.grids,
         "lower": round(cfg.lower, 4),
