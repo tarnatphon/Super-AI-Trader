@@ -12,6 +12,9 @@ scales up to real data (yfinance) and real LLMs (OpenAI / DeepSeek / **local Oll
 
 ```bash
 # zero install needed — uses only the Python standard library
+python3 -m super_ai_trader ask "set up a safe grid for Bitcoin with 1000 USDT"
+python3 -m super_ai_trader ask "analyze Ethereum — should I buy?"
+python3 -m super_ai_trader ask "is my money safe?"
 python3 -m super_ai_trader backtest --ticker DEMO --trades
 python3 -m super_ai_trader analyze  --ticker DEMO
 

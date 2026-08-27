@@ -71,6 +71,12 @@ HTML = r"""<!doctype html>
   .fine{color:var(--muted);font-size:14px;margin-top:10px}
   .tab{cursor:pointer;text-decoration:underline;color:var(--accent)}
   footer{text-align:center;color:var(--muted);font-size:14px;margin-top:30px}
+  .chip{background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:999px;
+    padding:9px 14px;font-size:15px;cursor:pointer}
+  .chip:hover{border-color:var(--accent)}
+  .msg{border-radius:12px;padding:12px 16px;margin:10px 0;font-size:17px;line-height:1.5}
+  .msg.you{background:rgba(74,163,255,.10);border:1px solid rgba(74,163,255,.3)}
+  .msg.ai{background:rgba(41,196,132,.10);border:1px solid rgba(41,196,132,.35);white-space:pre-wrap}
   @media(max-width:560px){.metrics{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
 </style>
 </head>
@@ -89,6 +95,26 @@ HTML = r"""<!doctype html>
     <button id="liveBtn" onclick="setMode('live')">
       🔗 CONNECT EXCHANGE <small>Binance / Gate.io · still no withdrawals</small>
     </button>
+  </div>
+
+  <!-- TALK TO YOUR AI -->
+  <div class="card">
+    <h2>💬 Tell your AI what you want</h2>
+    <p class="help">Just type like you're talking to a person. The AI thinks, the robot does the
+      work, and the Safety Shield protects you. Try one of these:</p>
+    <div id="chips" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="chip" onclick="quick('Set up a safe grid for Bitcoin with 1000 USDT')">Set up a safe Bitcoin grid</button>
+      <button class="chip" onclick="quick('Analyze Ethereum — should I buy?')">Analyze Ethereum</button>
+      <button class="chip" onclick="quick('Backtest the strategy on Bitcoin')">Backtest the strategy</button>
+      <button class="chip" onclick="quick('Learn and predict Bitcoin')">Learn &amp; predict</button>
+      <button class="chip" onclick="quick('Is my money safe?')">Is my money safe?</button>
+    </div>
+    <div style="display:flex;gap:10px">
+      <input id="ask" placeholder="e.g. set up a safe grid for Bitcoin with 1000"
+        onkeydown="if(event.key==='Enter')askAI()">
+      <button class="btn btn-green" style="width:auto;margin-top:0;padding:14px 24px" onclick="askAI()">Ask ▶</button>
+    </div>
+    <div id="chat" style="margin-top:14px"></div>
   </div>
 
   <!-- STEP CARD -->
@@ -233,6 +259,30 @@ async function post(path,body){
   const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   return r.json();
 }
+function addMsg(who,text){
+  const div=document.createElement('div');
+  div.className='msg '+(who==='you'?'you':'ai');
+  div.textContent=(who==='you'?'🧑 ':'🤖 ')+text;
+  document.getElementById('chat').appendChild(div);
+  div.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+async function askAI(){
+  const inp=document.getElementById('ask');
+  const text=inp.value.trim(); if(!text)return;
+  addMsg('you',text); inp.value='';
+  const thinking=document.createElement('div');
+  thinking.className='msg ai'; thinking.textContent='🤖 …';
+  document.getElementById('chat').appendChild(thinking);
+  const res=await post('/api/ask',{text});
+  thinking.remove();
+  addMsg('ai',res.reply.replace(/^🤖\s*/,''));
+  // If it was a grid, also show the friendly result card.
+  if(res.intent==='grid' && res.data && res.data.result){
+    const g=res.data.result;
+    drawChart(g.curve||[g.final_equity]);
+  }
+}
+function quick(t){ document.getElementById('ask').value=t; askAI(); }
 async function run(){ showResult(await post('/api/simulate', vals())); }
 async function autoset(){
   const res=await post('/api/autoset', Object.assign(vals(),{risk_mode:'steady'}));

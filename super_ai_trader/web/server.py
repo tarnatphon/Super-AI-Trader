@@ -15,6 +15,7 @@ from ..data.market import get_series
 from ..grid.engine import GridConfig, simulate_on_bars
 from ..grid.advisor import advise, plain_language
 from ..security.vault import Vault, security_checklist, platform_security_note
+from ..ai.commands import run_command
 
 
 def _simulate(payload: dict) -> dict:
@@ -147,6 +148,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_autoset(payload))
         elif u.path == "/api/connect":
             self._send(_connect(payload))
+        elif u.path == "/api/ask":
+            self._send(run_command(payload.get("text", "")))
         else:
             self._send({"error": "not found"}, 404)
 

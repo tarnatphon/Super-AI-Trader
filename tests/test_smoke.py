@@ -199,6 +199,23 @@ def test_vault_encrypts_and_rejects_bad_password():
         os.environ["HOME"] = old_home or ""
 
 
+def test_ai_command_center_routes_intents():
+    from super_ai_trader.ai.commands import run_command, classify
+    assert classify("set up a safe grid for bitcoin") == "grid"
+    assert classify("analyze ethereum should i buy") == "analyze"
+    assert classify("is my money safe") == "safety"
+    assert classify("learn and predict bitcoin") == "learn"
+    assert classify("backtest the strategy on eth") == "backtest"
+    assert classify("how do i set risk") == "risk"
+    assert classify("practice trade with real prices") == "paper"
+    # Each executable intent returns a plain-language reply.
+    for q in ["set up a safe grid for bitcoin with 1000 USDT",
+              "analyze bitcoin should i buy", "learn and predict bitcoin",
+              "backtest the strategy on bitcoin", "is my money safe", "help"]:
+        out = run_command(q)
+        assert out["intent"] and out["reply"].startswith("🤖")
+
+
 def test_assistant_offline_parse_numbers():
     from super_ai_trader.ai.assistant import offline_parse, to_grid_config
     p = offline_parse("trade 1000 USDT on Bitcoin safe grid 12 percent range")

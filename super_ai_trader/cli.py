@@ -53,6 +53,17 @@ def cmd_analyze(args) -> None:
         print("\n" + json.dumps(decision, indent=2, default=str))
 
 
+def cmd_ask(args) -> None:
+    """AI Command Center — one plain-language command for every function."""
+    from .ai.commands import run_command
+    import json as _json
+    text = " ".join(args.request)
+    out = run_command(text)
+    print("\n" + out["reply"] + "\n")
+    if args.json:
+        print(_json.dumps(out["data"], indent=2, default=str)[:4000])
+
+
 def cmd_talk(args) -> None:
     from .ai.assistant import interpret, to_grid_config, explain
     from .grid.engine import simulate_on_bars
@@ -307,6 +318,11 @@ def main() -> None:
     p_p.add_argument("--loops", type=int, default=None, help="stop after N polls (default: run)")
     p_p.add_argument("request", nargs="*", help="optional plain-language request instead of flags")
     p_p.set_defaults(func=cmd_paper)
+
+    p_a = sub.add_parser("ask", help="AI Command Center — one plain-language command for every function")
+    p_a.add_argument("request", nargs="+", help='e.g. "analyze Bitcoin" or "set up a safe grid 1000 USDT"')
+    p_a.add_argument("--json", action="store_true")
+    p_a.set_defaults(func=cmd_ask)
 
     p_t = sub.add_parser("talk", help="tell the local AI what you want in plain words")
     p_t.add_argument("request", nargs="+", help='e.g. "trade 1000 USDT on Bitcoin safe grid 12 percent"')
