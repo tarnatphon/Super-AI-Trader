@@ -34,6 +34,9 @@ INTENTS = {
 
 def classify(text: str) -> str:
     low = text.lower()
+    if any(k in low for k in ("optimize", "best trailing", "best position", "best settings",
+                              "find the best", "tune", "fine-tune", "fine tune")):
+        return "optimize"
     # Order matters: check specific intents first.
     if any(k in low for k in ("paper", "practice trade", "demo trade")):
         return "paper"
@@ -174,6 +177,13 @@ def run_command(text: str) -> dict:
             f"{perf.get('avg_monthly_pct','?')}% per month, profit factor {perf.get('profit_factor','?')}. "
             f"{'That lands in your 2-5% steady target — nice.' if perf.get('in_target_band') else 'Not yet in the 2-5% steady band; the shield keeps risk small while we improve.'}")
         return {"intent": intent, "reply": reply, "data": {"summary": res.summary()}}
+
+    if intent == "optimize":
+        from ..learning.trailing import optimize_trailing, explain_optimization
+        opt = optimize_trailing(coin, days=900)
+        reply = _bot(explain_optimization(opt))
+        return {"intent": intent, "reply": reply, "data": {"best": opt["best"],
+                "top5": opt["top5"], "confirmation": opt["confirmation"]}}
 
     if intent == "learn":
         from ..learning.train import train_for_ticker

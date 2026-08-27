@@ -356,6 +356,18 @@ def test_trailing_profit_locks_runner():
     assert pos2.trailing_on is False and pos2.target == 105.0
 
 
+def test_trailing_optimizer_picks_and_confirms():
+    from super_ai_trader.learning.trailing import optimize_trailing
+    # smaller search via the module grid on a short window: just ensure structure
+    opt = optimize_trailing("DEMO", days=600)
+    best = opt["best"]
+    assert best["arm_pct"] in (3.0, 4.0, 5.0, 6.0, 8.0)
+    assert best["giveback_pct"] in (0.5, 1.0, 1.5, 2.0)
+    assert len(opt["top5"]) == 5
+    assert opt["best"]["score"] >= opt["top5"][-1]["score"]
+    assert "robust" in opt["confirmation"]
+
+
 def test_bot_summary_shape():
     from super_ai_trader.data.market import make_synthetic_series
     from super_ai_trader.grid.engine import GridConfig, simulate_on_bars

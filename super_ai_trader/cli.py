@@ -53,6 +53,18 @@ def cmd_analyze(args) -> None:
         print("\n" + json.dumps(decision, indent=2, default=str))
 
 
+def cmd_optimize(args) -> None:
+    from .learning.trailing import optimize_trailing, explain_optimization
+    opt = optimize_trailing(args.ticker, days=args.days, real=args.real, verbose=args.verbose)
+    print("\n" + explain_optimization(opt) + "\n")
+    print("Top 5 trailing setups (by steadiness):")
+    for r in opt["top5"]:
+        tp = f"TP {r['take_profit_pct']}%" if r["take_profit_pct"] else "trail only"
+        print(f"  arm {r['arm_pct']:>4}% · giveback {r['giveback_pct']:>3}% · {tp:<9} "
+              f"→ score {r['score']:>6} | ret {r['return_pct']:+6.2f}% | dd {r['max_dd_pct']:5.2f}% "
+              f"| PF {r['profit_factor']} | {r['trades']} trades")
+
+
 def cmd_ask(args) -> None:
     """AI Command Center — one plain-language command for every function."""
     from .ai.commands import run_command
@@ -324,6 +336,13 @@ def main() -> None:
     p_p.add_argument("--loops", type=int, default=None, help="stop after N polls (default: run)")
     p_p.add_argument("request", nargs="*", help="optional plain-language request instead of flags")
     p_p.set_defaults(func=cmd_paper)
+
+    p_o = sub.add_parser("optimize", help="AI finds the best trailing buy/sell settings by backtesting")
+    p_o.add_argument("--ticker", default="BTC")
+    p_o.add_argument("--days", type=int, default=900)
+    p_o.add_argument("--real", action="store_true")
+    p_o.add_argument("--verbose", action="store_true")
+    p_o.set_defaults(func=cmd_optimize)
 
     p_a = sub.add_parser("ask", help="AI Command Center — one plain-language command for every function")
     p_a.add_argument("request", nargs="+", help='e.g. "analyze Bitcoin" or "set up a safe grid 1000 USDT"')
