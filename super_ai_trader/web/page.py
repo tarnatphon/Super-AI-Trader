@@ -151,6 +151,7 @@ HTML = r"""<!doctype html>
       <select id="presetList" style="width:auto;min-width:160px" onchange="loadPreset()">
         <option value="">— load a saved preset —</option>
       </select>
+      <button class="btn btn-gray" style="width:auto;margin-top:0;padding:12px 14px" title="Delete selected preset" onclick="deletePreset()">🗑️</button>
     </div>
 
     <h2 style="margin-top:22px">2️⃣ Choose how much (practice money)</h2>
@@ -376,6 +377,14 @@ async function loadPreset(){
   if(s.timeframe) document.getElementById('timeframe').value=s.timeframe;
 }
 function fmt(n){return Number(n).toLocaleString(undefined,{maximumFractionDigits:2});}
+async function deletePreset(){
+  const name=document.getElementById('presetList').value;
+  if(!name){ alert('Pick a preset to delete.'); return; }
+  if(!confirm('Delete preset "'+name+'"?')) return;
+  await post('/api/preset/delete',{name});
+  document.getElementById('presetList').value='';
+  await refreshPresets();
+}
 function drawChart(points){
   const svg=document.getElementById('chart'); svg.innerHTML='';
   if(!points||points.length<2) return;

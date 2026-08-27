@@ -167,6 +167,7 @@ def _live_start(payload: dict) -> dict:
                      stop_loss_price=ref * (1 - range_pct * 2 / 100),
                      take_profit_price=ref * (1 + range_pct * 2 / 100))
     sess = LiveSession(conn, cfg, poll_seconds=float(payload.get("poll", 5)),
+                       timeframe=str(payload.get("timeframe", "1h")),
                        behavior_fn=lambda: fetch_live_behavior(exchange, symbol))
     sess.start()
     _SESSION["live"] = sess
@@ -236,6 +237,11 @@ def _preset_save(payload: dict) -> dict:
 def _preset_list() -> dict:
     from ..settings import list_presets
     return {"presets": list_presets()}
+
+
+def _preset_delete(name: str) -> dict:
+    from ..settings import delete_preset
+    return delete_preset(name)
 
 
 def _preset_load(name: str) -> dict:
@@ -405,6 +411,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_autotune(payload))
         elif u.path == "/api/preset/save":
             self._send(_preset_save(payload))
+        elif u.path == "/api/preset/delete":
+            self._send(_preset_delete(str(payload.get("name", ""))))
         else:
             self._send({"error": "not found"}, 404)
 

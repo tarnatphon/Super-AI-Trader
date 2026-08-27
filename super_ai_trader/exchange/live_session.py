@@ -20,9 +20,10 @@ from .grid_runner import LiveGridRunner
 
 class LiveSession:
     def __init__(self, conn, cfg: GridConfig, poll_seconds: float = 5.0,
-                 behavior_fn=None):
+                 behavior_fn=None, timeframe: str = "1h"):
         self.conn = conn
         self.cfg = cfg
+        self.timeframe = timeframe
         self.runner = LiveGridRunner(conn, cfg)
         self.poll_seconds = poll_seconds
         self.behavior_fn = behavior_fn
@@ -45,7 +46,7 @@ class LiveSession:
         if hasattr(conn, "bars") and hasattr(conn, "cursor"):
             return conn.bars[max(0, conn.cursor - limit):conn.cursor + 1]
         try:
-            return conn.ohlcv(self.cfg.symbol, timeframe="1h", limit=limit)
+            return conn.ohlcv(self.cfg.symbol, timeframe=self.timeframe, limit=limit)
         except Exception:
             return []
 
