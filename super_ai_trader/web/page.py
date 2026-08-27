@@ -282,6 +282,25 @@ HTML = r"""<!doctype html>
     <input id="vaultpw" type="password" placeholder="a strong password you will remember">
     <button class="btn btn-gray" onclick="connect()">🔒 Save &amp; Lock Key (this computer only)</button>
     <div id="cresult" class="fine"></div>
+
+    <div style="margin-top:18px;border-top:1px dashed var(--line);padding-top:14px">
+      <h2 style="font-size:19px;color:#ffc7c7">⚠️ Switch to REAL money (optional)</h2>
+      <p class="help">Paper trading uses practice money and sends no orders. Real trading uses your
+        actual exchange balance. <b>Withdrawals must be OFF</b>, and the robot can never spend more
+        than the cap you set.</p>
+      <label>Saved key name</label>
+      <input id="rl_name" value="my-binance">
+      <div class="row">
+        <div><label>Vault password</label><input id="rl_pw" type="password" placeholder="to unlock your key"></div>
+        <div><label>Hard max spend (USDT)</label><input id="rl_cap" type="number" value="100"></div>
+      </div>
+      <button class="btn btn-gray" style="border-color:#ffc14d;color:#ffe2a8" onclick="realPrepare()">1️⃣ Check key (read-only)</button>
+      <div id="rl_prepare" class="fine"></div>
+      <label style="margin-top:8px">Type <b>I AGREE</b> to arm live trading:</label>
+      <input id="rl_agree" placeholder="I AGREE">
+      <button class="btn" style="background:#5a1f1f;color:#ffb3b3" onclick="realArm()">2️⃣ ARM REAL TRADING</button>
+      <div id="rl_result" class="fine"></div>
+    </div>
   </div>
 
   <footer>Educational software · not financial advice · runs on your own computer (127.0.0.1) · Super-AI-Trader</footer>
@@ -579,6 +598,27 @@ async function connect(){
   document.getElementById('cresult').textContent = res.ok
     ? `✅ Saved. Key saved as ${res.api_key_fp}. ${res.note}`
     : ('⚠️ '+res.error);
+}
+function rlBody(){
+  return {name:document.getElementById('rl_name').value,
+    password:document.getElementById('rl_pw').value,
+    max_spend:parseFloat(document.getElementById('rl_cap').value||0)};
+}
+async function realPrepare(){
+  const r=await post('/api/real/prepare',rlBody());
+  const el=document.getElementById('rl_prepare');
+  if(!r.ok){ el.style.color='#ffc7c7'; el.textContent='⚠️ '+r.error; return; }
+  el.style.color='#9af0cd';
+  el.innerHTML=`✅ Key OK on ${r.exchange} (${r.key_fingerprint}). Free USDT shown by exchange: ${r.free_usdt}. `+
+    `If armed, the robot may place buy orders totalling up to <b>${r.max_spend_requested} USDT</b> — never withdrawals. `+
+    `<br><b>Type "I AGREE" and press ARM.</b> ${r.note}`;
+}
+async function realArm(){
+  const body=Object.assign(rlBody(),{confirm:document.getElementById('rl_agree').value});
+  const r=await post('/api/real/arm',body);
+  const el=document.getElementById('rl_result');
+  el.style.color = r.ok ? '#9af0cd' : '#ffc7c7';
+  el.textContent = r.ok ? ('🔴 LIVE ARMED — '+r.message) : ('⚠️ '+r.error);
 }
 async function loadChecklist(){
   const r=await (await fetch('/api/checklist')).json();

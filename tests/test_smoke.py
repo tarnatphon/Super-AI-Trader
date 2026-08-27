@@ -368,6 +368,51 @@ def test_trailing_optimizer_picks_and_confirms():
     assert "robust" in opt["confirmation"]
 
 
+def test_live_order_guard_enforces_cap_and_phrase():
+    from super_ai_trader.exchange.guard import LiveOrderGuard, LiveNotArmed
+
+    class Fake:
+        def __init__(self): self.placed = []
+        def place_limit_buy(self, s, amt, px):
+            o = {"side": "buy", "amount": amt, "price": px}; self.placed.append(o); return o
+        def place_limit_sell(self, s, amt, px):
+            return {"side": "sell", "amount": amt, "price": px}
+
+    f = Fake(); g = LiveOrderGuard(f, max_spend=100.0)
+    # not armed -> refuses
+    try:
+        g.place_limit_buy("BTC/USDT", 1.0, 50)
+        assert False
+    except LiveNotArmed:
+        pass
+    # wrong phrase refuses
+    try:
+        g.arm("agree")
+        assert False
+    except LiveNotArmed:
+        pass
+    g.arm("I AGREE")
+    g.place_limit_buy("BTC/USDT", 1.0, 40.0)   # 40
+    g.place_limit_buy("BTC/USDT", 1.0, 50.0)   # 90
+    assert len(f.placed) == 2
+    try:
+        g.place_limit_buy("BTC/USDT", 1.0, 20.0)  # 110 > cap
+        assert False
+    except LiveNotArmed:
+        pass
+    assert g.remaining_spend() == 10.0
+    # sells require arming only
+    assert g.place_limit_sell("BTC/USDT", 1.0, 60.0)["side"] == "sell"
+
+
+def test_live_trading_prepare_validation_errors():
+    from super_ai_trader.exchange.live_trading import prepare_real_trade, arm_real_trading
+    r = prepare_real_trade("does-not-exist", "pw", 100)
+    assert r["ok"] is False and "key" in r["error"].lower()
+    r2 = arm_real_trading("nope", "pw", 100, "I AGREE")
+    assert r2["ok"] is False
+
+
 def test_trailing_visual_states():
     from super_ai_trader.grid.trailing_visual import simulate_trailing
     # below arm -> watching

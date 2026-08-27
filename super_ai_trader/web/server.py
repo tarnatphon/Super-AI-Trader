@@ -227,6 +227,25 @@ def _replay_advance(steps: int = 1) -> dict:
     return st
 
 
+def _real_prepare(payload: dict) -> dict:
+    from ..exchange.live_trading import prepare_real_trade
+    return prepare_real_trade(
+        payload.get("name", payload.get("exchange", "binance")),
+        payload.get("password", ""),
+        float(payload.get("max_spend", 0) or 0),
+    )
+
+
+def _real_arm(payload: dict) -> dict:
+    from ..exchange.live_trading import arm_real_trading
+    return arm_real_trading(
+        payload.get("name", payload.get("exchange", "binance")),
+        payload.get("password", ""),
+        float(payload.get("max_spend", 0) or 0),
+        payload.get("confirm", ""),
+    )
+
+
 def _live_status() -> dict:
     sess = _SESSION["live"]
     if sess is None or sess.stopped:
@@ -341,6 +360,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_replay_start(payload))
         elif u.path == "/api/replay/advance":
             self._send(_replay_advance(int(payload.get("steps", 1))))
+        elif u.path == "/api/real/prepare":
+            self._send(_real_prepare(payload))
+        elif u.path == "/api/real/arm":
+            self._send(_real_arm(payload))
         else:
             self._send({"error": "not found"}, 404)
 
