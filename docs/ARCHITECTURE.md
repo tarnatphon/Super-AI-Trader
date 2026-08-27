@@ -12,9 +12,10 @@ risk module has absolute veto power** and a backtest engine executes.
 
 ```bash
 # from the repo root (e.g. /Volumes/AI/super-ai-trader on your MacBook)
-python3 -m super_ai_trader backtest --ticker DEMO --trades
-python3 -m super_ai_trader backtest --ticker AAPL,MSFT,NVDA --real   # needs: pip install yfinance
-python3 -m super_ai_trader analyze  --ticker DEMO                     # print one AI-firm decision as JSON
+python3 -m super_ai_trader analyze  --ticker DEMO     # buying/selling pressure + buy/sell zones + votes
+python3 -m super_ai_trader learn    --ticker DEMO     # train the ML model, validate out-of-sample, show live read
+python3 -m super_ai_trader backtest --ticker DEMO     # OOS backtest (order-flow + learned model + costs)
+python3 -m super_ai_trader backtest --ticker AAPL,MSFT --real   # real data: pip install yfinance
 ```
 
 Run tests:
@@ -22,6 +23,33 @@ Run tests:
 python3 tests/test_smoke.py        # no pytest needed
 # or: pip install pytest && python -m pytest tests/
 ```
+
+## The "learn real buying & selling" layer
+
+The bot learns from **order flow / market microstructure**, predicts the next move,
+and knows *where* to buy and sell:
+
+- **Order flow** (`data/orderflow.py`): estimates aggressive **buy vs sell pressure**
+  from the tape — Close-Location-Value signed volume, **volume delta**, **cumulative
+  delta**, **order-flow imbalance**, and cumulative-delta/price **divergence** (quiet
+  accumulation/distribution). The `OrderFlowAgent` only acts when buyers/sellers are
+  clearly in control **and** price is at the right zone. (With tick data later, feed
+  exact aggressor side through the same interface.)
+- **Support / resistance zones** (`data/levels.py`): confirmed swing lows (**demand /
+  buy zone**) and swing highs (**supply / sell zone**) — never using future bars — with
+  suggested stops beyond the zone.
+- **Learned model** (`learning/`): a dependency-free logistic regression trains on the
+  first 60% of history and is **validated out-of-sample** on the rest (no look-ahead).
+  Features include the order-flow, levels, momentum and volatility signals; the
+  `LearnedAgent` only trades on high-confidence P(up) calls, preferring entries at
+  support (buys) / resistance (sells). `backtest` trains on the past and **trades only
+  the unseen window**, so results are honest.
+- **Realistic costs**: a per-side cost (default 0.1%) is charged on every entry/exit,
+  per the research finding that ignoring costs manufactures fake edge.
+
+> Backtests of the simple learned model are around chance on synthetic data — that is
+> the *correct* output: the system validates edge instead of overfitting it. Real edge
+> comes from better data (tick/order flow, news sentiment) and careful validation.
 
 ## The agent desk
 
@@ -79,6 +107,11 @@ Layered controls (the community-proven checklist from the research):
 - [x] Deterministic risk manager (sizing, kill switch, circuit breakers, regime scaling)
 - [x] Event-driven long/short backtest with equity curve & trade log
 - [x] Optional LLM agents (cloud or local Ollama), heuristic fallback
+- [x] **Order-flow / buy-vs-sell pressure** (volume delta, cumulative delta, divergence)
+- [x] **Support/resistance buy & sell zones** with zone-aware stops
+- [x] **Learned ML model** trained out-of-sample to predict the next move (pure Python)
+- [x] **Realistic per-trade costs** and out-of-sample-only backtest window
+- [ ] Real tick/Level-2 order-flow feed (Bitkub/Binance TH via CCXT; Alpaca for stocks)
 - [ ] Paper-trading mode against live quotes (Alpaca / CCXT)
 - [ ] Live execution connector (non-custodial, trade-only API keys)
 - [ ] Strategy R&D agent ("RBI": research → AI writes backtest → validate, Moon-Dev style)

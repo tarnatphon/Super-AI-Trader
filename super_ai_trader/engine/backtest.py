@@ -10,7 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..data.market import Bar, get_series
-from ..data.indicators import snapshot
+from ..data.indicators import precompute, snapshot_pre
+from ..data.orderflow import precompute_flow
 from ..agents.trading_firm import TradingFirm
 from ..risk.manager import RiskManager, RiskConfig, RiskState
 
@@ -47,9 +48,12 @@ class BacktestResult:
     trades: list[Trade] = field(default_factory=list)
     equity_curve: list[tuple[str, float]] = field(default_factory=list)
     blocks: int = 0
+    total_costs: float = 0.0
+    model_metrics: dict | None = None
+    pressure: dict | None = None
 
     def summary(self) -> str:
-        return (
+        s = (
             f"--- {self.ticker} backtest ---\n"
             f"  Start equity : {self.start_equity:,.2f}\n"
             f"  Final equity : {self.final_equity:,.2f}\n"
@@ -57,21 +61,59 @@ class BacktestResult:
             f"  Max drawdown : {self.max_drawdown_pct:.2f}%\n"
             f"  Trades       : {self.num_trades} (win rate {self.win_rate_pct:.1f}%)\n"
             f"  Risk blocks  : {self.blocks}\n"
+            f"  Trading costs: {self.total_costs:,.2f}\n"
         )
+        if self.model_metrics:
+            m = self.model_metrics
+            s += (f"  Learned model (out-of-sample): acc {m['accuracy']} "
+                  f"(base {m['base_up_rate']}), confident-buy hit {m['confident_buy_hit_rate']} "
+                  f"on {m['confident_buy_n']} calls, confident-sell hit {m['confident_sell_hit_rate']} "
+                  f"on {m['confident_sell_n']} calls\n")
+        if self.pressure:
+            p = self.pressure
+            s += (f"  Order flow   : {p['buy_pct']:.0f}% bars net buying / "
+                  f"{p['sell_pct']:.0f}% net selling\n")
+        return s
 
 
 def run_backtest(
     ticker: str = "DEMO",
-    days: int = 750,
+    days: int = 900,
     real: bool = False,
     start_equity: float = 100_000,
     risk_config: RiskConfig | None = None,
     use_llm: bool = False,
-    warmup: int = 210,
+    use_orderflow: bool = True,
+    use_learned: bool = True,
+    learned_model: dict | None = None,
+    cost_per_side_pct: float = 0.1,
+    horizon: int = 5,
+    train_fraction: float = 0.6,
     verbose: bool = False,
 ) -> BacktestResult:
     bars = get_series(ticker, days=days, real=real)
-    firm = TradingFirm(use_llm=use_llm)
+
+    # Precompute indicators + order flow once (O(n)) so the per-bar loop is fast.
+    pre = precompute(bars)
+    flow = precompute_flow(bars)
+
+    # --- Train the learned model on the FIRST portion; trade only the REST (OOS).
+    model_metrics = None
+    model = learned_model
+    split_idx = int(len(bars) * train_fraction)
+    if use_learned and model is None:
+        from ..learning.dataset import build_dataset
+        from ..learning.model import train_logistic, evaluate
+        Xtr, ytr, _ = build_dataset(bars[:split_idx], horizon=horizon)
+        if len(Xtr) > 50:
+            model = train_logistic(Xtr, ytr)
+            # Evaluate out-of-sample on the test window labels.
+            Xte, yte, _ = build_dataset(bars[split_idx:], horizon=horizon)
+            if Xte:
+                model_metrics = evaluate(model, Xte, yte)
+
+    firm = TradingFirm(use_llm=use_llm, use_orderflow=use_orderflow,
+                       learned_model=model if use_learned else None)
     risk = RiskManager(risk_config or RiskConfig())
     state = RiskState()
 
@@ -82,19 +124,26 @@ def run_backtest(
     peak = start_equity
     max_dd = 0.0
     blocks = 0
+    total_costs = 0.0
+    buy_bars = sell_bars = 0
     current_day = ""
 
-    for i in range(warmup, len(bars)):
+    # Only trade the out-of-sample window so results are honest.
+    start_i = max(split_idx, 210)
+
+    def apply_cost(notional: float) -> float:
+        c = notional * cost_per_side_pct / 100
+        return c
+
+    for i in range(start_i, len(bars)):
         bar = bars[i]
         day = bar.date
         if day != current_day:
             current_day = day
-            # equity at open approximation = cash + open position mark
             state.new_day(day, cash)
 
         price = bar.close
 
-        # Mark to market.
         equity = cash
         if position:
             if position.side == "LONG":
@@ -105,11 +154,9 @@ def run_backtest(
         equity_curve.append((day, round(equity, 2)))
         peak = max(peak, equity)
         max_dd = max(max_dd, (peak - equity) / peak * 100)
-
-        # Daily kill switch check.
         risk.check_day(state, equity)
 
-        # Manage open position: stop-out or exit signal.
+        # Manage open position: stop-out.
         if position:
             hit_stop = (
                 (position.side == "LONG" and bar.low <= position.stop)
@@ -117,71 +164,82 @@ def run_backtest(
             )
             if hit_stop:
                 exit_price = position.stop
+                notional = position.qty * exit_price
+                fee = apply_cost(notional)
+                cash -= fee
+                total_costs += fee
                 if position.side == "LONG":
-                    pnl = (exit_price - position.entry) * position.qty
+                    pnl = (exit_price - position.entry) * position.qty - fee
                     cash += position.qty * exit_price
                 else:
-                    # Release reserved margin and settle PnL.
-                    pnl = (position.entry - exit_price) * position.qty
+                    pnl = (position.entry - exit_price) * position.qty - fee
                     cash += position.qty * (2 * position.entry - exit_price)
                 trades.append(Trade(day, "EXIT", position.qty, exit_price, pnl, "stop-out"))
                 position = None
                 state.open_positions -= 1
 
-        # Ask the firm for a decision.
-        snap = snapshot(bars, i)
-        decision = firm.analyze(snap)
+        # Ask the firm (now with the tape + order flow + learned model).
+        snap = snapshot_pre(pre, bars, i)
+        decision = firm.analyze(snap, bars=bars, idx=i, pre=pre, flow=flow)
         raw_action = decision["action"]
         conviction = decision["conviction"]
         regime = decision["regime"]
         atr_pct = snap.get("atr14_pct")
 
-        # Conviction hysteresis: weak signals are HOLD. Opposing signals need
-        # to be even stronger to flip an open position (avoid churn/overtrade).
+        # Track aggregate buying/selling pressure over the test window.
+        if decision.get("order_flow"):
+            if decision["order_flow"]["ofi"] > 0.12:
+                buy_bars += 1
+            elif decision["order_flow"]["ofi"] < -0.12:
+                sell_bars += 1
+
         ENTRY_MIN = 55
         FLIP_MIN = 70
-        if conviction < ENTRY_MIN:
-            action = "HOLD"
-        else:
-            action = raw_action
+        action = raw_action if conviction >= ENTRY_MIN else "HOLD"
         if position and (
             (position.side == "LONG" and action == "SELL")
             or (position.side == "SHORT" and action == "BUY")
         ) and conviction < FLIP_MIN:
             action = "HOLD"
 
-        # Flip if position conflicts with a strong opposite signal.
+        # Flip on strong opposite signal.
         if position and (
             (position.side == "LONG" and action == "SELL")
             or (position.side == "SHORT" and action == "BUY")
         ):
             exit_price = price
+            notional = position.qty * exit_price
+            fee = apply_cost(notional)
+            cash -= fee
+            total_costs += fee
             if position.side == "LONG":
-                pnl = (exit_price - position.entry) * position.qty
+                pnl = (exit_price - position.entry) * position.qty - fee
                 cash += position.qty * exit_price
             else:
-                pnl = (position.entry - exit_price) * position.qty
+                pnl = (position.entry - exit_price) * position.qty - fee
                 cash += position.qty * (2 * position.entry - exit_price)
             trades.append(Trade(day, "EXIT", position.qty, exit_price, pnl, "signal flip"))
             position = None
             state.open_positions -= 1
 
-        # Enter new position if flat and agent wants action.
+        # Enter.
         if not position and action in ("BUY", "SELL") and not state.halted:
             trader = decision["trader"]
+            levels = decision.get("levels") or {}
             stop_pct = trader.get("stop_pct") or 2.0 * (atr_pct or 2)
+            # Prefer placing stops beyond the actual price zone when available.
             stop_price = (
                 price * (1 - stop_pct / 100) if action == "BUY"
                 else price * (1 + stop_pct / 100)
             )
+            if action == "BUY" and levels.get("stop_below"):
+                stop_price = min(stop_price, levels["stop_below"])
+            if action == "SELL" and levels.get("stop_above"):
+                stop_price = max(stop_price, levels["stop_above"])
+
             rd = risk.check_entry(
-                state=state,
-                side=action,
-                price=price,
-                stop_price=stop_price,
-                equity=equity,
-                regime=regime,
-                atr_pct=atr_pct,
+                state=state, side=action, price=price, stop_price=stop_price,
+                equity=equity, regime=regime, atr_pct=atr_pct,
             )
             if not rd.approved:
                 blocks += 1
@@ -189,38 +247,46 @@ def run_backtest(
                     print(f"  [{day}] RISK BLOCK {action}: {rd.reason}")
             else:
                 notional = equity * rd.size_pct / 100
+                fee = apply_cost(notional)
+                cash -= fee
+                total_costs += fee
                 qty = notional / price
-                if action == "BUY":
-                    cost = qty * price
-                    if cost <= cash:
-                        cash -= cost
-                        position = Position("LONG", qty, price, stop_price, day)
-                        state.open_positions += 1
-                        trades.append(Trade(day, "BUY", qty, price, 0.0,
-                                            f"{regime} | {trader['rationale']}"))
-                else:  # SELL (short) — margin = notional reserved from cash
-                    if notional <= cash:
-                        cash -= notional  # reserve margin
-                        position = Position("SHORT", qty, price, stop_price, day)
-                        state.open_positions += 1
-                        trades.append(Trade(day, "SELL", qty, price, 0.0,
-                                            f"{regime} | {trader['rationale']}"))
+                zone = ""
+                if levels:
+                    zone = (f" @support {levels['support']}" if levels.get("at_support")
+                            else f" @resistance {levels['resistance']}" if levels.get("at_resistance")
+                            else "")
+                if action == "BUY" and notional + fee <= cash:
+                    cash -= notional
+                    position = Position("LONG", qty, price, stop_price, day)
+                    state.open_positions += 1
+                    trades.append(Trade(day, "BUY", qty, price, 0.0,
+                                        f"{regime}{zone} | {trader['rationale']}"))
+                elif action == "SELL" and notional + fee <= cash:
+                    cash -= notional
+                    position = Position("SHORT", qty, price, stop_price, day)
+                    state.open_positions += 1
+                    trades.append(Trade(day, "SELL", qty, price, 0.0,
+                                        f"{regime}{zone} | {trader['rationale']}"))
 
-    # Liquidate at end.
     if position:
         last = bars[-1].close
+        notional = position.qty * last
+        fee = apply_cost(notional)
+        total_costs += fee
         if position.side == "LONG":
-            pnl = (last - position.entry) * position.qty
-            cash += position.qty * last
+            pnl = (last - position.entry) * position.qty - fee
+            cash += position.qty * last - fee
         else:
-            pnl = (position.entry - last) * position.qty
-            cash += position.qty * (2 * position.entry - last)  # release margin + pnl
+            pnl = (position.entry - last) * position.qty - fee
+            cash += position.qty * (2 * position.entry - last) - fee
         trades.append(Trade(bars[-1].date, "EXIT", position.qty, last, pnl, "end-of-backtest"))
         position = None
 
     closed = [t for t in trades if t.side == "EXIT"]
     wins = sum(1 for t in closed if t.pnl > 0)
     final_equity = cash
+    pressure_total = buy_bars + sell_bars
     return BacktestResult(
         ticker=ticker,
         final_equity=round(final_equity, 2),
@@ -233,4 +299,10 @@ def run_backtest(
         trades=trades,
         equity_curve=equity_curve,
         blocks=blocks,
+        total_costs=round(total_costs, 2),
+        model_metrics=model_metrics,
+        pressure={
+            "buy_pct": round(100 * buy_bars / pressure_total, 1) if pressure_total else 0,
+            "sell_pct": round(100 * sell_bars / pressure_total, 1) if pressure_total else 0,
+        },
     )

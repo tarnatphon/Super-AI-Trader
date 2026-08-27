@@ -7,6 +7,8 @@ deterministic heuristic, so the system always produces a decision.
 from __future__ import annotations
 
 from .base import Signal, LLMClient, clamp
+from ..data.orderflow import flow_snapshot
+from ..data.levels import level_setup
 
 
 # --------------------------------------------------------------------------- #
@@ -125,6 +127,102 @@ class RiskAnalyst:
         return Signal(self.name, "HOLD", 50, "volatility within normal bounds", None)
 
 
+class OrderFlowAgent:
+    """Reads REAL buying vs selling pressure (volume delta / order-flow imbalance)
+    and only acts when price is at a demand (support) or supply (resistance) zone.
+    This is the 'predict the move from who is actually buying/selling' agent."""
+
+    name = "order_flow"
+
+    def analyze(self, bars, idx: int, flow: dict, llm: LLMClient | None = None) -> tuple[Signal, dict]:
+        fs = flow_snapshot(flow, bars, idx)
+        atr_pct = None
+        # derive atr% from snapshot context lazily via levels call default
+        lvl = level_setup(bars, idx, flow)
+        ofi = fs["ofi"]
+        diverg = fs["cum_delta_divergence"]
+        pressure = fs["pressure"]
+
+        notes = [f"order-flow imbalance {ofi:+.2f} ({pressure})",
+                 f"buy-vol ratio {fs['buy_vol_ratio']:.2f}",
+                 f"cum-delta divergence {diverg}"]
+        if fs["volume_spike"]:
+            notes.append("volume spike")
+
+        score = 0
+        score += 2 if ofi > 0.20 else 1 if ofi > 0.12 else -2 if ofi < -0.20 else -1 if ofi < -0.12 else 0
+        if diverg == "bullish":
+            score += 2
+        elif diverg == "bearish":
+            score -= 2
+        if fs["clv"] > 0.5:
+            score += 1
+        elif fs["clv"] < -0.5:
+            score -= 1
+
+        # Zones: prefer buying AT support with buyers, selling AT resistance with sellers.
+        if lvl["at_support"] and score > 0:
+            score += 2
+            notes.append(f"at demand/support zone {lvl['support']} — buyers in control")
+        if lvl["at_resistance"] and score < 0:
+            score -= 2
+            notes.append(f"at supply/resistance zone {lvl['resistance']} — sellers in control")
+
+        action = "BUY" if score >= 3 else "SELL" if score <= -3 else "HOLD"
+        conviction = clamp(50 + abs(score) * 8, 5, 95)
+        sig = Signal(self.name, action, conviction, "; ".join(notes),
+                     stop_pct=lvl["stop_below"] if action == "BUY" else None)
+        return sig, {"flow": fs, "levels": lvl}
+
+
+class LearnedAgent:
+    """Uses the trained ML model to predict the next move (P[up]). Acts only on
+    high-confidence predictions, and prefers entries at the right price zone."""
+
+    name = "learned"
+
+    def __init__(self):
+        self.model = None
+
+    def set_model(self, model: dict) -> None:
+        self.model = model
+
+    def analyze(self, bars, idx: int, pre: dict, flow: dict,
+                lvl: dict | None = None) -> Signal:
+        from ..learning.dataset import features_at
+        if self.model is None:
+            return Signal(self.name, "HOLD", 50, "no trained model", None)
+        feats = features_at(bars, idx, pre, flow)
+        if feats is None:
+            return Signal(self.name, "HOLD", 50, "features not ready", None)
+        from ..learning.model import predict_proba
+        p_up = predict_proba(self.model, feats)
+        edge = p_up - 0.5
+        notes = [f"model P(up)={p_up:.2f}"]
+        if lvl:
+            if lvl.get("at_support"):
+                notes.append(f"at support {lvl['support']}")
+            if lvl.get("at_resistance"):
+                notes.append(f"at resistance {lvl['resistance']}")
+
+        # Confidence bands ~0.55 / 0.45; boost conviction near zones.
+        if p_up >= 0.58:
+            action, conviction = "BUY", clamp(50 + edge * 220, 5, 95)
+            if lvl and lvl.get("at_support"):
+                conviction = clamp(conviction + 8, 5, 97)
+                notes.append("high-confidence buy at demand")
+        elif p_up <= 0.42:
+            action, conviction = "SELL", clamp(50 + (0.5 - p_up) * 220, 5, 95)
+            if lvl and lvl.get("at_resistance"):
+                conviction = clamp(conviction + 8, 5, 97)
+                notes.append("high-confidence sell at supply")
+        else:
+            action, conviction = "HOLD", 50
+        return Signal(self.name, action, conviction, "; ".join(notes),
+                      stop_pct=lvl["stop_below"] if (lvl and action == "BUY") else
+                      (lvl["stop_above"] if lvl and action == "SELL" else None))
+
+
 # --------------------------------------------------------------------------- #
 # Bull / Bear debate + Trader + Portfolio Manager
 # --------------------------------------------------------------------------- #
@@ -204,7 +302,8 @@ class PortfolioManager:
 class TradingFirm:
     """Runs the full agent stack on a market snapshot."""
 
-    def __init__(self, use_llm: bool = True):
+    def __init__(self, use_llm: bool = True, use_orderflow: bool = True,
+                 learned_model: dict | None = None):
         self.llm = LLMClient() if use_llm else None
         self.tech = TechnicalAnalyst()
         self.mom = MomentumAnalyst()
@@ -215,9 +314,16 @@ class TradingFirm:
         self.bear = BearResearcher()
         self.trader = Trader()
         self.pm = PortfolioManager()
+        # Order-flow + learned agents (the "learn real buying/selling" layer).
+        self.use_orderflow = use_orderflow
+        self.of_agent = OrderFlowAgent()
+        self.learned = LearnedAgent()
+        if learned_model is not None:
+            self.learned.set_model(learned_model)
 
     def analyze(self, snap: dict, news: list[str] | None = None,
-                fundamentals: dict | None = None) -> dict:
+                fundamentals: dict | None = None, bars=None, idx: int = None,
+                pre: dict | None = None, flow: dict | None = None) -> dict:
         llm = self.llm
         signals = [
             self.tech.analyze(snap, llm),
@@ -226,10 +332,26 @@ class TradingFirm:
             self.fund.analyze(snap, llm, fundamentals),
             self.risk_a.analyze(snap, llm),
         ]
+
+        flow_info = None
+        levels = None
+        # Order-flow + learned agents require the tape (bars/idx).
+        if bars is not None and idx is not None and flow is not None:
+            if self.use_orderflow:
+                of_sig, flow_info = self.of_agent.analyze(bars, idx, flow, llm)
+                signals.append(of_sig)
+                levels = flow_info["levels"]
+            if self.learned.model is not None and pre is not None:
+                l_sig = self.learned.analyze(bars, idx, pre, flow, levels)
+                signals.append(l_sig)
+
         bull = self.bull.debate(signals)
         bear = self.bear.debate(signals)
         trader = self.trader.propose(signals, bull, bear)
         decision = self.pm.decide(signals, bull, bear, trader)
         decision["snapshot"] = snap
         decision["llm_used"] = bool(llm and llm.enabled)
+        if flow_info is not None:
+            decision["order_flow"] = flow_info["flow"]
+            decision["levels"] = flow_info["levels"]
         return decision

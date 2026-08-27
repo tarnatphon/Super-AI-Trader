@@ -111,29 +111,53 @@ def bollinger(values: list[float], period: int = 20, num_std: float = 2.0):
 
 def snapshot(bars, idx: int) -> dict:
     """A compact feature snapshot at bar index `idx` for agents/strategies."""
+    return snapshot_pre(precompute(bars), bars, idx)
+
+
+def precompute(bars) -> dict:
+    """Compute every indicator series once (O(n)) so per-bar lookups are O(1)."""
     c = closes(bars)
-    price = c[idx]
-    rsi14 = rsi(c, 14)
     macd_line, sig, hist = macd(c)
-    atr14 = atr(bars, 14)
-    sma50 = sma(c, 50)
-    sma200 = sma(c, 200)
     upper, mid, lower = bollinger(c)
+    return {
+        "c": c,
+        "rsi": rsi(c, 14),
+        "macd_hist": hist,
+        "atr": atr(bars, 14),
+        "sma50": sma(c, 50),
+        "sma200": sma(c, 200),
+        "bb_upper": upper,
+        "bb_mid": mid,
+        "bb_lower": lower,
+    }
+
+
+def snapshot_pre(pre: dict, bars, idx: int) -> dict:
+    """Build the snapshot dict from precomputed series (fast, no look-ahead)."""
+    c = pre["c"]
+    price = c[idx]
 
     def pct(a, b):
         return None if a is None else round((a / b - 1) * 100, 2)
 
+    rsi_v = pre["rsi"][idx]
+    hist_v = pre["macd_hist"][idx]
+    atr_v = pre["atr"][idx]
+    s50 = pre["sma50"][idx]
+    s200 = pre["sma200"][idx]
+    up, lo = pre["bb_upper"][idx], pre["bb_lower"][idx]
+
     return {
         "date": bars[idx].date,
         "price": round(price, 2),
-        "rsi14": round(rsi14[idx], 1) if rsi14[idx] is not None else None,
-        "macd_hist": round(hist[idx], 3) if hist[idx] is not None else None,
-        "atr14_pct": round(atr14[idx] / price * 100, 2) if atr14[idx] else None,
-        "sma50_dist_pct": pct(sma50[idx], price) if sma50[idx] else None,
-        "sma200_dist_pct": pct(sma200[idx], price) if sma200[idx] else None,
+        "rsi14": round(rsi_v, 1) if rsi_v is not None else None,
+        "macd_hist": round(hist_v, 3) if hist_v is not None else None,
+        "atr14_pct": round(atr_v / price * 100, 2) if atr_v else None,
+        "sma50_dist_pct": pct(s50, price) if s50 else None,
+        "sma200_dist_pct": pct(s200, price) if s200 else None,
         "bb_pos": (
-            round((price - lower[idx]) / (upper[idx] - lower[idx]), 2)
-            if lower[idx] and upper[idx] and upper[idx] != lower[idx]
+            round((price - lo) / (up - lo), 2)
+            if lo and up and up != lo
             else None
         ),
         "ret_20d_pct": round((price / c[idx - 20] - 1) * 100, 2) if idx >= 20 else None,

@@ -86,6 +86,56 @@ def test_backtest_runs_and_accounting_balances():
     assert 0 <= res.win_rate_pct <= 100
 
 
+def test_order_flow_pressure_bounded():
+    from super_ai_trader.data.market import make_synthetic_series
+    from super_ai_trader.data.orderflow import precompute_flow, flow_snapshot
+    bars = make_synthetic_series("X", days=300, seed=5)
+    flow = precompute_flow(bars)
+    fs = flow_snapshot(flow, bars, len(bars) - 1)
+    assert -1.0 <= fs["ofi"] <= 1.0
+    assert 0.0 <= fs["buy_vol_ratio"] <= 1.0
+    assert fs["pressure"] in ("buying", "selling", "balanced")
+    assert fs["cum_delta_divergence"] in ("bullish", "bearish", "none")
+
+
+def test_support_resistance_zones():
+    from super_ai_trader.data.market import make_synthetic_series
+    from super_ai_trader.data.levels import level_setup
+    bars = make_synthetic_series("X", days=400, seed=6)
+    lv = level_setup(bars, len(bars) - 1)
+    # support below price, resistance above price when present.
+    if lv["support"] is not None:
+        assert lv["support"] <= lv["price"]
+    if lv["resistance"] is not None:
+        assert lv["resistance"] >= lv["price"]
+    assert isinstance(lv["at_support"], bool)
+
+
+def test_learned_model_trains_and_predicts():
+    from super_ai_trader.data.market import make_synthetic_series
+    from super_ai_trader.learning.dataset import build_dataset
+    from super_ai_trader.learning.model import train_logistic, predict_proba, evaluate
+    bars = make_synthetic_series("X", days=800, seed=7)
+    Xtr, Xte, ytr, yte, _, _ = build_dataset(bars, horizon=5, test_fraction=0.4)
+    assert len(Xtr) > 50 and len(Xte) > 20
+    assert len(Xtr[0]) == 16
+    model = train_logistic(Xtr, ytr)
+    p = predict_proba(model, Xte[0])
+    assert 0.0 <= p <= 1.0
+    m = evaluate(model, Xte, yte)
+    assert 0.0 <= m["accuracy"] <= 1.0
+
+
+def test_backtest_includes_learning_and_orderflow():
+    res = run_backtest("DEMO", days=700, use_llm=False, use_orderflow=True,
+                       use_learned=True)
+    assert res.pressure is not None
+    assert 0 <= res.pressure["buy_pct"] <= 100
+    assert res.total_costs >= 0
+    # model metrics should be present when learned model trained on enough data
+    assert res.model_metrics is None or 0 <= res.model_metrics["accuracy"] <= 1
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
