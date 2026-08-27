@@ -17,15 +17,44 @@ from dataclasses import dataclass, field
 
 @dataclass
 class RiskConfig:
-    risk_per_trade_pct: float = 1.0      # % of equity risked to the stop
-    max_position_pct: float = 25.0       # max notional of equity in one position
-    max_open_positions: int = 3
-    daily_loss_limit_pct: float = 3.0    # kill-switch: stop trading for the day
-    max_atr_pct: float = 8.0             # block entries in extreme volatility
+    risk_per_trade_pct: float = 0.75     # % of equity risked to the stop
+    max_position_pct: float = 20.0       # max notional of equity in one position
+    max_open_positions: int = 2
+    daily_loss_limit_pct: float = 2.0    # kill-switch: stop trading for the day
+    max_atr_pct: float = 6.0             # block entries in extreme volatility
     min_atr_pct: float = 0.05            # block dead/stale markets
     chop_size_scale: float = 0.4         # shrink size in choppy regimes
     bear_size_scale: float = 0.6         # shrink shorts in bear / longs reduced
     allow_shorts: bool = True
+    take_profit_r_multiple: float = 1.5  # take profit at 1.5R (bank steady winners)
+
+    @classmethod
+    def steady(cls):
+        """Tuned for consistent, small 2-5%/month gains with tight drawdowns."""
+        return cls(
+            risk_per_trade_pct=0.5,
+            max_position_pct=15.0,
+            max_open_positions=2,
+            daily_loss_limit_pct=1.5,
+            max_atr_pct=5.0,
+            chop_size_scale=0.35,
+            bear_size_scale=0.5,
+            take_profit_r_multiple=1.5,
+        )
+
+    @classmethod
+    def aggressive(cls):
+        """Higher risk / higher variance for comparison."""
+        return cls(
+            risk_per_trade_pct=1.5,
+            max_position_pct=35.0,
+            max_open_positions=4,
+            daily_loss_limit_pct=4.0,
+            max_atr_pct=9.0,
+            chop_size_scale=0.6,
+            bear_size_scale=0.8,
+            take_profit_r_multiple=2.5,
+        )
 
 
 @dataclass

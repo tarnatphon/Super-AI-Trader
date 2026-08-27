@@ -22,6 +22,7 @@ class Position:
     qty: float
     entry: float
     stop: float
+    target: float           # take-profit price
     entry_date: str
 
 
@@ -51,6 +52,7 @@ class BacktestResult:
     total_costs: float = 0.0
     model_metrics: dict | None = None
     pressure: dict | None = None
+    perf: dict | None = None
 
     def summary(self) -> str:
         s = (
@@ -73,6 +75,16 @@ class BacktestResult:
             p = self.pressure
             s += (f"  Order flow   : {p['buy_pct']:.0f}% bars net buying / "
                   f"{p['sell_pct']:.0f}% net selling\n")
+        if self.perf:
+            m = self.perf
+            s += (
+                f"  STEADINESS    : {m['profitable_months_pct']:.0f}% profitable months, "
+                f"avg {m['avg_monthly_pct']:+.2f}%/mo "
+                f"(best {m['best_month_pct']:+.2f}, worst {m['worst_month_pct']:+.2f})\n"
+                f"  Risk-adjusted : Sharpe {m['monthly_sharpe']}, "
+                f"Sortino {m['monthly_sortino']}, profit factor {m['profit_factor']}\n"
+                f"  Target band   : avg/month in 2-5% -> {'YES ✅' if m['in_target_band'] else 'no'}\n"
+            )
         return s
 
 
@@ -82,6 +94,7 @@ def run_backtest(
     real: bool = False,
     start_equity: float = 100_000,
     risk_config: RiskConfig | None = None,
+    profile: str = "steady",
     use_llm: bool = False,
     use_orderflow: bool = True,
     use_learned: bool = True,
@@ -112,9 +125,16 @@ def run_backtest(
             if Xte:
                 model_metrics = evaluate(model, Xte, yte)
 
+    # Risk profile: steady (default) vs aggressive.
+    if risk_config is None:
+        risk_config = RiskConfig.steady() if profile == "steady" else (
+            RiskConfig.aggressive() if profile == "aggressive" else RiskConfig()
+        )
+    tp_r = risk_config.take_profit_r_multiple
+
     firm = TradingFirm(use_llm=use_llm, use_orderflow=use_orderflow,
                        learned_model=model if use_learned else None)
-    risk = RiskManager(risk_config or RiskConfig())
+    risk = RiskManager(risk_config)
     state = RiskState()
 
     cash = start_equity
@@ -156,14 +176,24 @@ def run_backtest(
         max_dd = max(max_dd, (peak - equity) / peak * 100)
         risk.check_day(state, equity)
 
-        # Manage open position: stop-out.
+        # Manage open position: stop-out then take-profit (check stop first —
+        # conservative, since within one bar both could trade).
         if position:
             hit_stop = (
                 (position.side == "LONG" and bar.low <= position.stop)
                 or (position.side == "SHORT" and bar.high >= position.stop)
             )
+            hit_target = (
+                (position.side == "LONG" and bar.high >= position.target)
+                or (position.side == "SHORT" and bar.low <= position.target)
+            )
+            exit_reason = None
+            exit_price = None
             if hit_stop:
-                exit_price = position.stop
+                exit_reason, exit_price = "stop-out", position.stop
+            elif hit_target:
+                exit_reason, exit_price = "take-profit", position.target
+            if exit_reason:
                 notional = position.qty * exit_price
                 fee = apply_cost(notional)
                 cash -= fee
@@ -174,7 +204,7 @@ def run_backtest(
                 else:
                     pnl = (position.entry - exit_price) * position.qty - fee
                     cash += position.qty * (2 * position.entry - exit_price)
-                trades.append(Trade(day, "EXIT", position.qty, exit_price, pnl, "stop-out"))
+                trades.append(Trade(day, "EXIT", position.qty, exit_price, pnl, exit_reason))
                 position = None
                 state.open_positions -= 1
 
@@ -227,7 +257,6 @@ def run_backtest(
             trader = decision["trader"]
             levels = decision.get("levels") or {}
             stop_pct = trader.get("stop_pct") or 2.0 * (atr_pct or 2)
-            # Prefer placing stops beyond the actual price zone when available.
             stop_price = (
                 price * (1 - stop_pct / 100) if action == "BUY"
                 else price * (1 + stop_pct / 100)
@@ -236,6 +265,12 @@ def run_backtest(
                 stop_price = min(stop_price, levels["stop_below"])
             if action == "SELL" and levels.get("stop_above"):
                 stop_price = max(stop_price, levels["stop_above"])
+            # Take-profit at tp_r x risk distance (bank steady winners).
+            risk_dist = abs(price - stop_price)
+            target_price = (
+                price + tp_r * risk_dist if action == "BUY"
+                else price - tp_r * risk_dist
+            )
 
             rd = risk.check_entry(
                 state=state, side=action, price=price, stop_price=stop_price,
@@ -258,16 +293,16 @@ def run_backtest(
                             else "")
                 if action == "BUY" and notional + fee <= cash:
                     cash -= notional
-                    position = Position("LONG", qty, price, stop_price, day)
+                    position = Position("LONG", qty, price, stop_price, target_price, day)
                     state.open_positions += 1
                     trades.append(Trade(day, "BUY", qty, price, 0.0,
-                                        f"{regime}{zone} | {trader['rationale']}"))
+                                        f"{regime}{zone} | T {target_price:.2f} | {trader['rationale']}"))
                 elif action == "SELL" and notional + fee <= cash:
                     cash -= notional
-                    position = Position("SHORT", qty, price, stop_price, day)
+                    position = Position("SHORT", qty, price, stop_price, target_price, day)
                     state.open_positions += 1
                     trades.append(Trade(day, "SELL", qty, price, 0.0,
-                                        f"{regime}{zone} | {trader['rationale']}"))
+                                        f"{regime}{zone} | T {target_price:.2f} | {trader['rationale']}"))
 
     if position:
         last = bars[-1].close
@@ -287,6 +322,10 @@ def run_backtest(
     wins = sum(1 for t in closed if t.pnl > 0)
     final_equity = cash
     pressure_total = buy_bars + sell_bars
+
+    from .metrics import compute_metrics
+    perf = compute_metrics(equity_curve, trades, start_equity)
+
     return BacktestResult(
         ticker=ticker,
         final_equity=round(final_equity, 2),
@@ -301,6 +340,7 @@ def run_backtest(
         blocks=blocks,
         total_costs=round(total_costs, 2),
         model_metrics=model_metrics,
+        perf=perf,
         pressure={
             "buy_pct": round(100 * buy_bars / pressure_total, 1) if pressure_total else 0,
             "sell_pct": round(100 * sell_bars / pressure_total, 1) if pressure_total else 0,

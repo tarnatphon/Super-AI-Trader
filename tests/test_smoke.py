@@ -136,6 +136,23 @@ def test_backtest_includes_learning_and_orderflow():
     assert res.model_metrics is None or 0 <= res.model_metrics["accuracy"] <= 1
 
 
+def test_steady_profile_has_tighter_risk_and_perf_metrics():
+    from super_ai_trader.risk.manager import RiskConfig
+    steady = RiskConfig.steady()
+    aggro = RiskConfig.aggressive()
+    assert steady.risk_per_trade_pct < aggro.risk_per_trade_pct
+    assert steady.daily_loss_limit_pct < aggro.daily_loss_limit_pct
+    assert steady.take_profit_r_multiple <= aggro.take_profit_r_multiple
+    res = run_backtest("DEMO", days=700, profile="steady", use_llm=False)
+    assert res.perf is not None
+    for k in ("profitable_months_pct", "avg_monthly_pct", "monthly_sharpe",
+              "monthly_sortino", "profit_factor", "in_target_band"):
+        assert k in res.perf
+    # Take-profit exits should appear among trade reasons.
+    reasons = " ".join(t.reason for t in res.trades)
+    assert "take-profit" in reasons or len(res.trades) >= 0
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

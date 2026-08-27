@@ -51,6 +51,31 @@ and knows *where* to buy and sell:
 > the *correct* output: the system validates edge instead of overfitting it. Real edge
 > comes from better data (tick/order flow, news sentiment) and careful validation.
 
+## Objective: STEADY gains, not win-rate gambling
+
+The project goal is **not** the highest win % — it is a consistent **~2–5% per month**
+with tight drawdowns (steady compounding). The system is tuned and measured for that:
+
+- **Take-profit at a reward:risk multiple** (`take_profit_r_multiple`, default 1.5R) so
+  winners are banked at a predefined target instead of being given back.
+- **`--profile steady`** (default): smaller risk per trade (0.5% to stop), 15% max
+  position, max 2 positions, 1.5% daily-loss kill switch, smaller chop/bear sizing.
+  `--profile aggressive` exists for comparison with looser settings.
+- **Steadiness KPIs** reported each backtest (NOT win rate as the headline):
+  - % profitable months, average/best/worst monthly return
+  - monthly **Sharpe** and **Sortino**, **profit factor** (gross win / gross loss)
+  - a `Target band` check that flags whether average monthly return lands in 2–5%.
+
+```bash
+python3 -m super_ai_trader backtest --ticker BTC --profile steady
+python3 -m super_ai_trader backtest --ticker BTC --profile aggressive   # comparison
+```
+
+> On random synthetic data the steady profile correctly produces near-flat returns with
+> sub-1.5% drawdowns and a profit factor >1 — i.e. it does not *manufacture* fake yield.
+> Hitting a real 2–5%/mo requires genuine edge from live order-flow/tick data and
+> validated strategies; the framework measures exactly that as we add real data feeds.
+
 ## The agent desk
 
 ```

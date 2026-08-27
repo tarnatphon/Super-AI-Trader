@@ -86,9 +86,10 @@ def cmd_learn(args) -> None:
 
 
 def cmd_backtest(args) -> None:
-    cfg = RiskConfig(allow_shorts=not args.long_only)
+    cfg = RiskConfig(allow_shorts=not args.long_only) if args.long_only else None
     tickers = [t.strip() for t in args.ticker.split(",") if t.strip()]
-    print(f"\nSuper-AI-Trader  |  data={'real(yfinance)' if args.real else 'synthetic'}  "
+    print(f"\nSuper-AI-Trader  |  profile={args.profile}  |  "
+          f"data={'real(yfinance)' if args.real else 'synthetic'}  "
           f"|  LLM={'on' if args.llm else 'off'}  |  order-flow={'on' if not args.no_orderflow else 'off'}  "
           f"|  learned={'on' if not args.no_learned else 'off'}  |  cost={args.cost}%/side\n")
     for ticker in tickers:
@@ -98,6 +99,7 @@ def cmd_backtest(args) -> None:
             real=args.real,
             start_equity=args.equity,
             risk_config=cfg,
+            profile=args.profile,
             use_llm=args.llm,
             use_orderflow=not args.no_orderflow,
             use_learned=not args.no_learned,
@@ -106,6 +108,11 @@ def cmd_backtest(args) -> None:
             verbose=args.verbose,
         )
         print(res.summary())
+        if args.trades:
+            for t in res.trades[-12:]:
+                pnl = f"{t.pnl:+,.0f}" if t.side == "EXIT" else "-"
+                print(f"   {t.date}  {t.side:4s}  qty={t.qty:8.2f}  px={t.price:8.2f}  pnl={pnl}  {t.reason}")
+            print()
         if args.trades:
             for t in res.trades[-15:]:
                 tag = t.side
@@ -125,6 +132,8 @@ def main() -> None:
     common.add_argument("--llm", action="store_true", help="enable LLM agents (needs LLM_API_KEY / OPENAI_API_KEY)")
 
     p_bt = sub.add_parser("backtest", parents=[common], help="run an out-of-sample backtest")
+    p_bt.add_argument("--profile", choices=["steady", "aggressive", "default"], default="steady",
+                      help="steady targets consistent 2-5%/mo with tight drawdowns (default)")
     p_bt.add_argument("--equity", type=float, default=100_000)
     p_bt.add_argument("--long-only", action="store_true")
     p_bt.add_argument("--trades", action="store_true", help="print recent trades")
