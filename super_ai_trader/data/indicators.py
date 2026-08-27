@@ -109,6 +109,88 @@ def bollinger(values: list[float], period: int = 20, num_std: float = 2.0):
     return upper, mid, lower
 
 
+def parabolic_sar(bars, af_start: float = 0.02, af_step: float = 0.02, af_max: float = 0.2):
+    """Parabolic SAR. Returns (sar_values, trend) with trend 1=uptrend, -1=downtrend."""
+    n = len(bars)
+    sar = [None] * n
+    trend = [0] * n
+    if n < 3:
+        return sar, trend
+    down = bars[1].close < bars[0].close
+    ep = bars[0].low if down else bars[0].high      # extreme point
+    s = bars[0].high if down else bars[0].low        # SAR value
+    af = af_start
+    for i in range(1, n):
+        h, l = bars[i].high, bars[i].low
+        prev_h, prev_l = bars[i - 1].high, bars[i - 1].low
+        if down:
+            s = s + af * (ep - s)
+            s = max(s, prev_h, bars[i - 2].high) if i >= 2 else max(s, prev_h)
+            if h > s:                                   # reversal up
+                down = False
+                s = ep
+                ep = h
+                af = af_start
+            elif l < ep:
+                ep = l
+                af = min(af + af_step, af_max)
+        else:
+            s = s + af * (ep - s)
+            s = min(s, prev_l, bars[i - 2].low) if i >= 2 else min(s, prev_l)
+            if l < s:                                   # reversal down
+                down = True
+                s = ep
+                ep = l
+                af = af_start
+            elif h > ep:
+                ep = h
+                af = min(af + af_step, af_max)
+        sar[i] = round(s, 6)
+        trend[i] = -1 if down else 1
+    return sar, trend
+
+
+def supertrend(bars, period: int = 10, mult: float = 3.0):
+    """Supertrend (ATR-based). Returns (line, direction), direction 1=up, -1=down."""
+    n = len(bars)
+    atr_v = atr(bars, period)
+    line = [None] * n
+    direction = [1] * n
+    upper_band, lower_band = [None] * n, [None] * n
+    for i in range(n):
+        a = atr_v[i]
+        if a is None:
+            continue
+        hl2 = (bars[i].high + bars[i].low) / 2
+        bu, bl = hl2 + mult * a, hl2 - mult * a
+        if upper_band[i - 1] is not None:
+            bu = bu if bu < upper_band[i - 1] or bars[i - 1].close > upper_band[i - 1] else upper_band[i - 1]
+            bl = bl if bl > lower_band[i - 1] or bars[i - 1].close < lower_band[i - 1] else lower_band[i - 1]
+        upper_band[i], lower_band[i] = bu, bl
+    st, dir_ = None, 1
+    for i in range(n):
+        if upper_band[i] is None:
+            continue
+        c = bars[i].close
+        if st is None:
+            st = lower_band[i]
+        if dir_ == 1:
+            st = lower_band[i]
+            if c < st:
+                dir_, st = -1, upper_band[i]
+        else:
+            st = upper_band[i]
+            if c > st:
+                dir_, st = 1, lower_band[i]
+        line[i] = round(st, 6)
+        direction[i] = dir_
+    return line, direction
+
+
+def volume_ma(bars, period: int = 10):
+    return sma([b.volume for b in bars], period)
+
+
 def snapshot(bars, idx: int) -> dict:
     """A compact feature snapshot at bar index `idx` for agents/strategies."""
     return snapshot_pre(precompute(bars), bars, idx)

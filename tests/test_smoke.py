@@ -216,6 +216,42 @@ def test_ai_command_center_routes_intents():
         assert out["intent"] and out["reply"].startswith("🤖")
 
 
+def test_chart_reader_reads_all_indicators():
+    from super_ai_trader.data.market import make_synthetic_series
+    from super_ai_trader.ai.chart_reader import read_chart
+    bars = make_synthetic_series("BNB", days=300, seed=4)
+    r = read_chart(bars)
+    names = set(r["indicators"].keys())
+    # Every indicator from the trading screen is present.
+    assert {"EMA_7_25_99", "BOLL", "SAR", "SUPER", "RSI", "MACD", "VOL_AVL"} <= names
+    assert r["verdict"] in ("BUY bias", "SELL bias", "WAIT / HOLD")
+    for d in r["indicators"].values():
+        assert "reading" in d and "note" in d
+
+
+def test_live_behavior_fallback():
+    from super_ai_trader.data.live_behavior import behavior_from_ohlcv, live_behavior
+    from super_ai_trader.data.market import make_synthetic_series
+    bars = make_synthetic_series("BNB", days=200, seed=3)
+    beh = behavior_from_ohlcv(bars)
+    assert 0 <= beh["buy_ratio"] <= 1 and beh["pressure"] in ("buyers", "sellers", "balanced")
+    # live_behavior falls back to candle estimate when no ccxt/exchange
+    live = live_behavior("binance", "BNB/USDT", bars=bars)
+    assert "buy_ratio" in live and "pressure" in live
+
+
+def test_command_center_chart_and_behavior():
+    from super_ai_trader.ai.commands import classify, run_command
+    assert classify("read the chart on BNB") == "chart"
+    assert classify("show me ema macd rsi on bnb") == "chart"
+    assert classify("who is buying right now live BNB") == "behavior"
+    assert classify("live order book for bnb") == "behavior"
+    c = run_command("read the chart on BNB")
+    assert c["intent"] == "chart" and c["reply"].startswith("🤖")
+    b = run_command("live order book for bnb")
+    assert b["intent"] == "behavior" and b["reply"].startswith("🤖")
+
+
 def test_assistant_offline_parse_numbers():
     from super_ai_trader.ai.assistant import offline_parse, to_grid_config
     p = offline_parse("trade 1000 USDT on Bitcoin safe grid 12 percent range")

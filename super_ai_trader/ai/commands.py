@@ -37,6 +37,13 @@ def classify(text: str) -> str:
     # Order matters: check specific intents first.
     if any(k in low for k in ("paper", "practice trade", "demo trade")):
         return "paper"
+    if any(k in low for k in ("read the chart", "read chart", "read the graph", "indicators",
+                              "ema", "macd", "boll", "rsi", "sar", "supertrend", "super trend")):
+        return "chart"
+    if any(k in low for k in ("live", "order book", "orderbook", "buyers", "sellers",
+                              "human", "right now", "depth", "who is buying", "who's buying",
+                              "live behavior")):
+        return "behavior"
     # Grid / strategy intents before general safety, so "safe grid" -> grid.
     if any(k in low for k in ("grid", "buy low", "sell high")):
         return "grid"
@@ -98,6 +105,43 @@ def run_command(text: str) -> dict:
             + ("The safety stop was triggered — that's the shield protecting the money."
                if res.stopped else "The safety stop was not needed in this test."))
         return {"intent": intent, "reply": reply, "data": {"result": _grid_dict(res)}}
+
+    if intent == "chart":
+        from ..ai.chart_reader import read_chart, explain_chart
+        from ..data.market import get_series
+        bars = get_series(coin, days=300)
+        reading = read_chart(bars)
+        detail = "\n".join("  • " + ln for ln in reading["lines"])
+        reply = _bot(
+            f"Here's how I read the {coin} chart, indicator by indicator:\n{detail}\n"
+            f"Overall ({len(reading['indicators'])} indicators agree): score "
+            f"{reading['score']:+d} → **{reading['verdict']}**. This is what MA, EMA, BOLL, "
+            "SAR, AVL/VOLUME, SUPER(SUPERtrend), MACD and RSI are all saying together.")
+        return {"intent": intent, "reply": reply, "data": {"reading": reading,
+                "explain": explain_chart(reading)}}
+
+    if intent == "behavior":
+        from ..data.live_behavior import live_behavior
+        ex = parsed["exchange"]
+        beh = live_behavior(ex, f"{coin}/USDT")
+        walls = ""
+        ob = beh
+        if beh.get("big_bid_wall"):
+            walls += f" There's a big BUY wall around {beh['big_bid_wall'][0]} (real support)."
+        if beh.get("big_ask_wall"):
+            walls += f" A big SELL wall sits near {beh['big_ask_wall'][0]} (resistance)."
+        spread = f", spread {beh['spread_pct']}%" if beh.get("spread_pct") is not None else ""
+        reply = _bot(
+            f"Watching LIVE human behavior on {coin} ({beh['source']}){spread}. "
+            f"Right now {beh['pressure']} are in control — {round(beh['buy_ratio']*100)}% buying "
+            f"vs {round(beh['sell_ratio']*100)}% selling, order-flow imbalance {beh['trade_flow_imbalance']:+}. "
+            + (f"In the live order book, {round((beh.get('buyer_pressure_depth') or 0)*100)}% of resting "
+               f"size is on BUY bids and {round((beh.get('seller_pressure_depth') or 0)*100)}% on SELL asks."
+               if beh.get("order_book_bid_ask_imbalance") is not None else
+               "(Using recent candles as the live feed/ccxt isn't connected; connect to see the real order book.)")
+            + walls +
+            " I learn this pressure over time and combine it with the chart reading before I suggest a trade.")
+        return {"intent": intent, "reply": reply, "data": {"behavior": beh}}
 
     if intent == "analyze":
         from ..data.market import get_series
@@ -182,6 +226,8 @@ def run_command(text: str) -> dict:
         f"• \"Analyze Ethereum — should I buy?\"\n"
         f"• \"Backtest the strategy on {coin or 'BTC'}\"\n"
         "• \"Learn and predict Bitcoin\"\n"
+        "• \"Read the chart\" or \"show me EMA MACD RSI on Ethereum\"\n"
+        "• \"Who is buying right now / live order book for BNB\"\n"
         "• \"Practice trade with real prices\"\n"
         "• \"Set risk to 1 percent\"\n"
         "• \"Is my money safe?\"")
