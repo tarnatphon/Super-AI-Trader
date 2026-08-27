@@ -42,12 +42,23 @@ def _steady_score(perf: dict, res) -> float:
 
 
 def optimize_trailing(ticker: str = "DEMO", days: int = 900, real: bool = False,
-                      verbose: bool = False) -> dict:
-    """Search the grid on a training window, confirm best on a test window."""
+                      verbose: bool = False, quick: bool = False) -> dict:
+    """Search the grid on a training window, confirm best on a test window.
+
+    quick=True uses a smaller/faster sweep for the in-app 'Auto-tune' button.
+    """
+    if quick:
+        arm_grid = [4.0, 5.0, 6.0]
+        giveback_grid = [1.0, 1.5]
+        tp_grid = [None]
+        days = min(days, 700)
+    else:
+        arm_grid = ARM_GRID
+        giveback_grid = GIVEBACK_GRID
+        tp_grid = TP_GRID
+
     results = []
-    # Tune on the full series (the backtest already trades an out-of-sample
-    # window for the ML model), then re-confirm the winner on a different seed/horizon.
-    for arm, give, tp in product(ARM_GRID, GIVEBACK_GRID, TP_GRID):
+    for arm, give, tp in product(arm_grid, giveback_grid, tp_grid):
         overrides = {
             "trailing_arm_pct": arm,
             "trailing_giveback_pct": give,
@@ -77,8 +88,9 @@ def optimize_trailing(ticker: str = "DEMO", days: int = 900, real: bool = False,
     best = results[0]
 
     # Confirmation run: same setting on a different horizon to check robustness.
+    confirm_days = (max(400, days - 100) if quick else max(500, days - 200))
     confirm = run_backtest(
-        ticker, days=max(500, days - 200), real=real, profile="steady",
+        ticker, days=confirm_days, real=real, profile="steady",
         use_llm=False, horizon=10,
         overrides={"trailing_arm_pct": best["arm_pct"],
                    "trailing_giveback_pct": best["giveback_pct"],
@@ -92,6 +104,7 @@ def optimize_trailing(ticker: str = "DEMO", days: int = 900, real: bool = False,
         "ticker": ticker,
         "best": best,
         "top5": results[:5],
+        "tested": len(results),
         "confirmation": {
             "return_pct": confirm.total_return_pct,
             "max_dd_pct": confirm.max_drawdown_pct,
@@ -105,9 +118,10 @@ def optimize_trailing(ticker: str = "DEMO", days: int = 900, real: bool = False,
 def explain_optimization(opt: dict) -> str:
     b = opt["best"]
     c = opt["confirmation"]
+    n = opt.get("tested", 60)
     tp = f"with a {b['take_profit_pct']}% fixed target" if b["take_profit_pct"] else "letting winners run"
     lines = [
-        f"I tested {len(ARM_GRID)*len(GIVEBACK_GRID)*len(TP_GRID)} trailing setups and picked the steadiest one for {opt['ticker']}.",
+        f"I tested {n} trailing setups and picked the steadiest one for {opt['ticker']}.",
         f"Best logic: hold the trade while it rises; once it's up about {b['arm_pct']:.0f}%, "
         f"start trailing; if it falls back {b['giveback_pct']:.1f}% from its highest point, sell — "
         f"{tp}.",

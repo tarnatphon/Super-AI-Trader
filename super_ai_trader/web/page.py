@@ -163,6 +163,9 @@ HTML = r"""<!doctype html>
 
     <button class="btn btn-blue" onclick="autoset()">✨ Auto-Set For Me (easiest)</button>
     <button class="btn btn-green" onclick="run()">▶️ Try It — Show My Results</button>
+    <button class="btn" style="background:#2a3f66;color:#bcd6ff;margin-top:10px"
+      onclick="autoTune()">🧠 Auto-tune best exit for this coin</button>
+    <div id="tuneBox" class="autosay" style="display:none"></div>
     <button class="btn btn-gray" style="margin-top:10px" onclick="botDetails()">🤖 Show Bot Details (running summary)</button>
     <div id="autosay" class="autosay" style="display:none"></div>
   </div>
@@ -590,6 +593,16 @@ async function autoset(){
     res.plain.map(l=>`<li>• ${l}</li>`).join('')+'</ul>';
   showResult(res.sim);
 }
+async function autoTune(){
+  const box=document.getElementById('tuneBox'); box.style.display='block';
+  box.textContent='🧠 Thinking — testing many trailing settings…';
+  const r=await post('/api/autotune',{ticker:document.getElementById('ticker').value});
+  if(!r.ok){ box.textContent='⚠️ Could not tune.'; return; }
+  const b=r.best;
+  box.innerHTML='<b>🧠 Best smart-exit I found for '+r.ticker+':</b><br>• '
+    +r.explanation.split('\n').join('<br>• ')
+    +'<br><br><b>Apply it?</b> Arm after <b>'+b.arm_pct+'%</b>, give back <b>'
+    +b.giveback_pct+'%</b> from the peak. (You can still use --trail-arm / --trail-giveback.)';
 async function connect(){
   const body={exchange:document.getElementById('ex').value,name:document.getElementById('cname').value,
     api_key:document.getElementById('apikey').value,api_secret:document.getElementById('apisecret').value,

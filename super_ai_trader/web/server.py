@@ -227,6 +227,22 @@ def _replay_advance(steps: int = 1) -> dict:
     return st
 
 
+def _autotune(payload: dict) -> dict:
+    """Fast AI trailing optimization for the selected coin."""
+    from ..learning.trailing import optimize_trailing, explain_optimization
+    ticker = payload.get("ticker", "BTC")
+    opt = optimize_trailing(ticker, days=700, real=False, quick=True)
+    b = opt["best"]
+    return {
+        "ok": True,
+        "ticker": ticker,
+        "best": b,
+        "top5": opt["top5"],
+        "confirmation": opt["confirmation"],
+        "explanation": explain_optimization(opt).replace("🤖", "").strip(),
+    }
+
+
 def _real_prepare(payload: dict) -> dict:
     from ..exchange.live_trading import prepare_real_trade
     return prepare_real_trade(
@@ -364,6 +380,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_real_prepare(payload))
         elif u.path == "/api/real/arm":
             self._send(_real_arm(payload))
+        elif u.path == "/api/autotune":
+            self._send(_autotune(payload))
         else:
             self._send({"error": "not found"}, 404)
 
