@@ -216,6 +216,26 @@ def test_ai_command_center_routes_intents():
         assert out["intent"] and out["reply"].startswith("🤖")
 
 
+def test_bot_summary_shape():
+    from super_ai_trader.data.market import make_synthetic_series
+    from super_ai_trader.grid.engine import GridConfig, simulate_on_bars
+    from super_ai_trader.grid.summary import bot_summary
+    bars = make_synthetic_series("SOL", days=400, seed=9)
+    ref = bars[0].close
+    cfg = GridConfig(symbol="SOL/USDT", lower=ref*0.85, upper=ref*1.15,
+                     grids=25, mode="geometric", investment=1000, fee_pct=0.1)
+    res = simulate_on_bars(cfg, bars)
+    b = bot_summary(cfg, res, bars)
+    assert b["symbol"] == "SOL/USDT" and b["mode"] == "geometric"
+    assert len(b["profit_curve"]) >= 1
+    pv = b["preview"]
+    assert len(pv["price"]) == len(pv["ema7"]) == len(pv["ema25"])
+    # ladder wraps current price: buys below, sells above
+    assert all(p < b["price_now"] for p in pv["buy_levels"])
+    assert all(p > b["price_now"] for p in pv["sell_levels"])
+    assert "roi_pct" in b and "matched_trades_total" in b
+
+
 def test_chart_reader_reads_all_indicators():
     from super_ai_trader.data.market import make_synthetic_series
     from super_ai_trader.ai.chart_reader import read_chart

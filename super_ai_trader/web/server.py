@@ -89,6 +89,27 @@ def _autoset(payload: dict) -> dict:
     }
 
 
+def _botdetails(payload: dict) -> dict:
+    from ..grid.summary import bot_summary
+    ticker = payload.get("ticker", "BTC")
+    investment = float(payload.get("investment", 1_000))
+    bars = get_series(ticker, days=int(payload.get("days", 600)), real=False)
+    ref = bars[0].close
+    range_pct = float(payload.get("range_pct", 12))
+    grids = int(payload.get("grids", 25))
+    mode = payload.get("mode", "geometric")
+    fee = float(payload.get("fee", 0.1))
+    cfg = GridConfig(
+        symbol=f"{ticker}/USDT",
+        lower=ref * (1 - range_pct / 100), upper=ref * (1 + range_pct / 100),
+        grids=grids, mode=mode, investment=investment, fee_pct=fee, range_pct=range_pct,
+        stop_loss_price=ref * (1 - range_pct * 2 / 100),
+        take_profit_price=ref * (1 + range_pct * 2 / 100),
+    )
+    res = simulate_on_bars(cfg, bars)
+    return bot_summary(cfg, res, bars)
+
+
 def _connect(payload: dict) -> dict:
     """Save credentials locally (never echoed back)."""
     exchange = payload.get("exchange")
@@ -150,6 +171,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_connect(payload))
         elif u.path == "/api/ask":
             self._send(run_command(payload.get("text", "")))
+        elif u.path == "/api/botdetails":
+            self._send(_botdetails(payload))
         else:
             self._send({"error": "not found"}, 404)
 

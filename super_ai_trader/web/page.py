@@ -159,7 +159,24 @@ HTML = r"""<!doctype html>
 
     <button class="btn btn-blue" onclick="autoset()">✨ Auto-Set For Me (easiest)</button>
     <button class="btn btn-green" onclick="run()">▶️ Try It — Show My Results</button>
+    <button class="btn btn-gray" style="margin-top:10px" onclick="botDetails()">🤖 Show Bot Details (running summary)</button>
     <div id="autosay" class="autosay" style="display:none"></div>
+  </div>
+
+  <!-- BOT DETAILS (running summary) -->
+  <div class="card" id="botCard" style="display:none">
+    <h2>🤖 Bot Details — how your robot is doing</h2>
+    <div class="metrics">
+      <div class="metric"><div class="k">ROI</div><div class="v" id="b_roi"></div></div>
+      <div class="metric"><div class="k">Profit (practice)</div><div class="v" id="b_pnl"></div></div>
+      <div class="metric"><div class="k">Buy/Sell fills</div><div class="v" id="b_trades"></div></div>
+      <div class="metric"><div class="k">Profit per grid</div><div class="v" id="b_ppg"></div></div>
+    </div>
+    <label style="margin-top:16px">📈 Profit over time</label>
+    <svg id="profitChart" viewBox="0 0 600 140" preserveAspectRatio="none"></svg>
+    <label style="margin-top:10px">🗺️ Bot preview — green buys below, red sells above (EMA 7/25/99)</label>
+    <svg id="previewChart" viewBox="0 0 600 220"></svg>
+    <div class="fine" id="b_info"></div>
   </div>
 
   <!-- RESULTS -->
@@ -283,6 +300,55 @@ async function askAI(){
   }
 }
 function quick(t){ document.getElementById('ask').value=t; askAI(); }
+async function botDetails(){
+  const v=vals();
+  const b=await post('/api/botdetails',v);
+  document.getElementById('botCard').style.display='block';
+  document.getElementById('b_roi').innerHTML = (b.roi_pct>=0?'<span class="up">':'<span class="down">')+b.roi_pct+'%</span>';
+  document.getElementById('b_pnl').innerHTML = (b.pnl>=0?'<span class="up">+':'<span class="down">')+fmt(b.pnl)+'</span>';
+  document.getElementById('b_trades').textContent = b.matched_trades_total+' matched';
+  document.getElementById('b_ppg').textContent = b.profit_per_grid_pct+'%';
+  document.getElementById('b_info').textContent =
+    `${b.symbol} · ${b.mode} · ${b.grids} grids · range ${b.lower}–${b.upper} · fees ${fmt(b.fees)} · `+
+    (b.stopped?'safety stop triggered':'still running safely');
+  drawProfit(b.profit_curve);
+  drawPreview(b.preview);
+  document.getElementById('botCard').scrollIntoView({behavior:'smooth'});
+}
+function drawProfit(pts){
+  const svg=document.getElementById('profitChart'); svg.innerHTML='';
+  if(!pts||pts.length<2)return;
+  const W=600,H=130,pad=8,min=Math.min(...pts),max=Math.max(...pts),rng=(max-min)||1;
+  const xy=pts.map((p,i)=>[pad+i*(W-2*pad)/(pts.length-1),H-pad-(p-min)/rng*(H-2*pad)]);
+  const d=xy.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const col=pts[pts.length-1]>=pts[0]?'#29c484':'#ff6b6b';
+  const area=d+` L${W-pad} ${H-pad} L${pad} ${H-pad} Z`;
+  svg.innerHTML=`<path d="${area}" fill="${col}" opacity="0.12"/><path d="${d}" fill="none" stroke="${col}" stroke-width="2.5"/>`;
+}
+function drawPreview(pv){
+  const svg=document.getElementById('previewChart'); svg.innerHTML='';
+  const W=600,H=210,pad=24;
+  const price=pv.price.filter(x=>x!=null);
+  const all=[...price,...(pv.buy_levels||[]),...(pv.sell_levels||[]),
+    ...pv.ema7.filter(x=>x!=null),...pv.ema25.filter(x=>x!=null),...pv.ema99.filter(x=>x!=null)];
+  const min=Math.min(...all),max=Math.max(...all),rng=(max-min)||1;
+  const X=i=>pad+i*(W-2*pad)/(Math.max(1,pv.price.length-1));
+  const Y=v=>H-pad-(v-min)/rng*(H-2*pad);
+  function line(arr,col,w){
+    let d='',started=false;
+    arr.forEach((v,i)=>{ if(v==null)return; d+=(started?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; started=true;});
+    return `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linejoin="round"/>`;
+  }
+  let html='';
+  // grid ladder: buy lines (green, below price) and sell lines (red, above)
+  (pv.buy_levels||[]).forEach(v=>{ html+=`<line x1="${pad}" y1="${Y(v)}" x2="${W-pad}" y2="${Y(v)}" stroke="#29c484" stroke-width="1.4" opacity="0.55"/>`;});
+  (pv.sell_levels||[]).forEach(v=>{ html+=`<line x1="${pad}" y1="${Y(v)}" x2="${W-pad}" y2="${Y(v)}" stroke="#ff6b6b" stroke-width="1.4" opacity="0.55"/>`;});
+  html+=line(pv.price,'#cfe0ff',2.2);
+  html+=line(pv.ema7,'#ffd54a',1.4);
+  html+=line(pv.ema25,'#ff4dd2',1.4);
+  html+=line(pv.ema99,'#b48cff',1.4);
+  svg.innerHTML=html;
+}
 async function run(){ showResult(await post('/api/simulate', vals())); }
 async function autoset(){
   const res=await post('/api/autoset', Object.assign(vals(),{risk_mode:'steady'}));
