@@ -143,6 +143,10 @@ HTML = r"""<!doctype html>
     <div class="big" id="mk_price" style="font-size:28px">–</div>
     <svg id="marketChart" viewBox="0 0 600 220"></svg>
     <div class="fine" id="mk_pressure"></div>
+    <label style="margin-top:12px;display:flex;gap:8px;align-items:center;font-weight:700">
+      <input type="checkbox" id="mk_grid_on" checked onchange="loadMarket()" style="width:auto">
+      Show the robot’s buy/sell grid on the chart
+    </label>
   </div>
 
   <!-- STEP CARD -->
@@ -725,7 +729,11 @@ loadMarket();
 
 async function loadMarket(){
   const body={exchange:'binance', ticker:document.getElementById('mk_coin').value,
-    timeframe:document.getElementById('mk_tf').value, limit:400};
+    timeframe:document.getElementById('mk_tf').value, limit:400,
+    show_grid:document.getElementById('mk_grid_on')?.checked !== false,
+    range_pct: parseFloat(document.getElementById('range_pct')?.value||12),
+    grids: parseInt(document.getElementById('grids')?.value||25),
+    mode: document.getElementById('mode')?.value||'geometric'};
   const m=await post('/api/market', body);
   document.getElementById('mk_src').textContent='Source: '+m.source;
   const chg=m.change_pct;
@@ -739,9 +747,9 @@ async function loadMarket(){
 function drawMarket(m){
   const svg=document.getElementById('marketChart'); svg.innerHTML='';
   const W=600,H=210,pad=30;
-  const series=[m.closes.filter(x=>x!=null), m.ema99.filter(x=>x!=null),
-    m.ema25.filter(x=>x!=null), m.ema7.filter(x=>x!=null)];
-  const all=m.closes.concat(m.ema7).concat(m.ema25).concat(m.ema99).filter(x=>x!=null);
+  let all=m.closes.concat(m.ema7).concat(m.ema25).concat(m.ema99).filter(x=>x!=null);
+  if(m.grid){ const gv=(m.grid.buy_levels||[]).concat(m.grid.sell_levels||[]);
+    if(gv.length){all=all.concat(gv);} }
   const min=Math.min(...all),max=Math.max(...all),rng=(max-min)||1;
   const N=m.closes.length;
   const X=i=>pad+i*(W-2*pad)/Math.max(1,N-1);
@@ -751,12 +759,19 @@ function drawMarket(m){
     arr.forEach((v,i)=>{ if(v==null)return; d+=(started?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; started=true; });
     return `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w}"/>`;
   }
-  svg.innerHTML =
-    line(m.ema99,'#b48cff',1.4)+line(m.ema25,'#ff4dd2',1.6)+line(m.ema7,'#ffd54a',1.8)+
-    line(m.closes,'#7fd3ff',2.4)+
-    `<text x="${pad}" y="16" fill="#ffd54a" font-size="12">EMA 7</text>`+
-    `<text x="${pad+64}" y="16" fill="#ff4dd2" font-size="12">EMA 25</text>`+
-    `<text x="${pad+138}" y="16" fill="#b48cff" font-size="12">EMA 99</text>`;
+  let html='';
+  if(m.grid){
+    (m.grid.buy_levels||[]).forEach(v=>{ html+=`<line x1="${pad}" y1="${Y(v)}" x2="${W-pad}" y2="${Y(v)}" stroke="#29c484" stroke-width="1.2" opacity="0.5"/>`; });
+    (m.grid.sell_levels||[]).forEach(v=>{ html+=`<line x1="${pad}" y1="${Y(v)}" x2="${W-pad}" y2="${Y(v)}" stroke="#ff6b6b" stroke-width="1.2" opacity="0.5"/>`; });
+    html+=`<line x1="${pad}" y1="${Y(m.last)}" x2="${W-pad}" y2="${Y(m.last)}" stroke="#ffd54a" stroke-dasharray="4 4" stroke-width="1" opacity="0.7"/>`;
+  }
+  html += line(m.ema99,'#b48cff',1.4)+line(m.ema25,'#ff4dd2',1.6)+line(m.ema7,'#ffd54a',1.8)+line(m.closes,'#7fd3ff',2.4);
+  html += `<text x="${pad}" y="16" fill="#ffd54a" font-size="12">EMA7</text>`+
+          `<text x="${pad+62}" y="16" fill="#ff4dd2" font-size="12">EMA25</text>`+
+          `<text x="${pad+136}" y="16" fill="#b48cff" font-size="12">EMA99</text>`+
+          `<text x="${W-pad-150}" y="16" fill="#29c484" font-size="12">● buy</text>`+
+          `<text x="${W-pad-80}" y="16" fill="#ff6b6b" font-size="12">● sell</text>`;
+  svg.innerHTML=html;
 }
 </script>
 </body>

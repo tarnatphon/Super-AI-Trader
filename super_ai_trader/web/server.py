@@ -60,6 +60,19 @@ def _market(payload: dict) -> dict:
         out = vals[::step]
         return [round(v, 6) if v is not None else None for v in out]
     e7, e25, e99 = ema(c, 7), ema(c, 25), ema(c, 99)
+    grid = None
+    if payload.get("show_grid", True):
+        last = c[-1]
+        rp = float(payload.get("range_pct", 12))
+        gn = int(payload.get("grids", 25))
+        geom = payload.get("mode", "geometric") == "geometric"
+        lo, hi = last * (1 - rp / 100), last * (1 + rp / 100)
+        lines = [(lo * (hi / lo) ** (i / gn)) if geom else (lo + (hi - lo) * i / gn)
+                 for i in range(gn + 1)]
+        grid = {
+            "buy_levels": [round(p, 6) for p in lines if p < last][-12:],
+            "sell_levels": [round(p, 6) for p in lines if p > last][:12],
+        }
     try:
         beh = live_behavior(exchange, symbol, bars=bars)
     except Exception:
@@ -72,6 +85,7 @@ def _market(payload: dict) -> dict:
         "change_pct": round((c[-1] / c[0] - 1) * 100, 2),
         "closes": ds(c),
         "ema7": ds(e7), "ema25": ds(e25), "ema99": ds(e99),
+        "grid": grid,
         "pressure": beh.get("pressure") if beh else None,
         "buy_ratio": beh.get("buy_ratio") if beh else None,
         "sell_ratio": beh.get("sell_ratio") if beh else None,
