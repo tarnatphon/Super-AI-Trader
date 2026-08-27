@@ -216,6 +216,80 @@ def test_ai_command_center_routes_intents():
         assert out["intent"] and out["reply"].startswith("🤖")
 
 
+class _FakeLiveConn:
+    """Stand-in for ExchangeConnector with deterministic live prices."""
+    paper = True
+    def __init__(self, prices):
+        self._prices = prices
+        self._i = 0
+        self.usdt = None
+        self.fills = []
+        self.orders = []
+    def price(self, symbol):
+        p = self._prices[min(self._i, len(self._prices) - 1)]
+        self._i += 1
+        return p
+    def place_limit_buy(self, s, amt, px):
+        from super_ai_trader.exchange.connector import Order
+        o = Order(id=f"b{len(self.orders)}", side="buy", symbol=s, amount=amt, price=px)
+        self.orders.append(o); return o
+    def place_limit_sell(self, s, amt, px):
+        from super_ai_trader.exchange.connector import Order
+        o = Order(id=f"s{len(self.orders)}", side="sell", symbol=s, amount=amt, price=px)
+        self.orders.append(o); return o
+    def cancel(self, o):
+        if o in self.orders: self.orders.remove(o)
+    def tick_paper(self, s, price):
+        filled = []
+        for o in list(self.orders):
+            if o.side == "buy" and price <= o.price:
+                self.usdt = self.cfg.investment if self.usdt is None else self.usdt
+        return filled
+    def equity(self, price):
+        return 1000.0
+
+
+def test_live_session_steps_with_fake_feed():
+    from super_ai_trader.grid.engine import GridConfig
+    from super_ai_trader.exchange.live_session import LiveSession
+
+    class Conn(_FakeLiveConn):
+        def __init__(self, prices, investment):
+            super().__init__(prices)
+            self.usdt = investment
+            self.base = 0.0
+        def tick_paper(self, s, price):
+            filled = []
+            for o in list(self.orders):
+                if o.side == "buy" and price <= o.price and not o.filled:
+                    cost = o.amount * o.price
+                    if cost <= self.usdt:
+                        self.usdt -= cost; self.base += o.amount
+                        o.filled = True; self.fills.append(o); self.orders.remove(o); filled.append(o)
+                elif o.side == "sell" and price >= o.price and not o.filled and o.amount <= self.base + 1e-12:
+                    self.usdt += o.amount * o.price; self.base -= o.amount
+                    o.filled = True; self.fills.append(o); self.orders.remove(o); filled.append(o)
+            return filled
+        def equity(self, price):
+            return self.usdt + self.base * price
+
+    # Price oscillates around 100 -> grid should get buy/sell fills.
+    prices = [100, 98, 96, 99, 102, 104, 101, 97, 95, 100, 105, 108]
+    conn = Conn(prices, 1000.0)
+    cfg = GridConfig(symbol="SOL/USDT", lower=90, upper=110, grids=20,
+                     mode="geometric", investment=1000, fee_pct=0.1, range_pct=10)
+    sess = LiveSession(conn, cfg, poll_seconds=0.01)
+    sess.start()
+    for _ in range(len(prices)):
+        sess.step()
+    st = sess.status()
+    assert st["symbol"] == "SOL/USDT"
+    assert len(st["price_curve"]) >= len(prices)
+    assert st["price"] in prices
+    assert st["equity"] is not None
+    sess.stop()
+
+
 def test_bot_summary_shape():
     from super_ai_trader.data.market import make_synthetic_series
     from super_ai_trader.grid.engine import GridConfig, simulate_on_bars

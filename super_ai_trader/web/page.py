@@ -179,6 +179,44 @@ HTML = r"""<!doctype html>
     <div class="fine" id="b_info"></div>
   </div>
 
+  <!-- LIVE TRADING PANEL -->
+  <div class="card">
+    <h2>📡 Live — watch the robot trade real prices</h2>
+    <p class="help">Connects to the real exchange price (Binance / Gate.io). In <b>practice</b> mode it
+      uses practice money and sends <b>no real orders</b> — but every number is live. Use Preview first
+      to see the past result, then Start to watch it live.</p>
+    <div class="row">
+      <div><label>Exchange</label>
+        <select id="lv_ex"><option value="binance">Binance</option><option value="gateio">Gate.io</option></select>
+      </div>
+      <div><label>Coin</label>
+        <select id="lv_coin"><option>SOL</option><option>BTC</option><option>ETH</option><option>BNB</option></select>
+      </div>
+    </div>
+    <div class="row">
+      <div><label>Money (practice USDT)</label><input id="lv_amt" type="number" value="1000" min="50"></div>
+      <div><label>Range width</label><input id="lv_range" type="number" value="12"></div>
+    </div>
+    <div class="row">
+      <button class="btn btn-gray" style="width:auto" onclick="preview()">🕘 Preview — show PAST result</button>
+      <button class="btn btn-green" style="margin-top:18px" onclick="liveStart()">▶️ START LIVE (practice)</button>
+    </div>
+    <button class="btn" style="background:#3a2030;color:#ffb3b3;margin-top:10px;display:none" id="stopBtn" onclick="liveStop()">⏹️ STOP the robot</button>
+    <div id="liveStatus" class="fine"></div>
+    <div id="liveBox" style="display:none">
+      <div class="metrics">
+        <div class="metric"><div class="k">Live price</div><div class="v" id="lv_price">–</div></div>
+        <div class="metric"><div class="k">ROI (live)</div><div class="v" id="lv_roi">–</div></div>
+        <div class="metric"><div class="k">Equity</div><div class="v" id="lv_equity">–</div></div>
+        <div class="metric"><div class="k">Buys / Sells</div><div class="v" id="lv_fills">–</div></div>
+      </div>
+      <label style="margin-top:12px">💰 Live profit curve</label>
+      <svg id="liveChart" viewBox="0 0 600 140" preserveAspectRatio="none"></svg>
+      <div class="fine" id="lv_behavior"></div>
+    </div>
+    <div id="prevNote" class="fine"></div>
+  </div>
+
   <!-- RESULTS -->
   <div class="card" id="resultCard" style="display:none">
     <h2>📊 What happened</h2>
@@ -272,6 +310,64 @@ function showResult(sim){
     (sim.unrealized<0? 'Note: some coins are still held and worth a bit less now — the stop-loss protects you in real use.':'');
   document.getElementById('resultCard').scrollIntoView({behavior:'smooth'});
 }
+let liveTimer=null;
+function lvPayload(){
+  return {ticker:document.getElementById('lv_coin').value,
+          exchange:document.getElementById('lv_ex').value,
+          investment:parseFloat(document.getElementById('lv_amt').value||1000),
+          range_pct:parseFloat(document.getElementById('lv_range').value||12),
+          grids:parseInt(document.getElementById('grids').value||25),
+          mode:document.getElementById('mode').value, poll:5};
+}
+async function liveStart(){
+  const r=await post('/api/live/start',lvPayload());
+  const st=document.getElementById('liveStatus');
+  if(!r.ok){ st.style.color='#ffc7c7'; st.textContent='⚠️ '+r.error; return; }
+  st.style.color='#9af0cd'; st.textContent='✅ '+r.message;
+  document.getElementById('liveBox').style.display='block';
+  document.getElementById('stopBtn').style.display='block';
+  if(liveTimer)clearInterval(liveTimer);
+  liveTimer=setInterval(livePoll,5000); livePoll();
+}
+async function livePoll(){
+  const r=await (await fetch('/api/live/status')).json();
+  if(!r.running){ if(liveTimer){clearInterval(liveTimer);liveTimer=null;}
+    document.getElementById('stopBtn').style.display='none';
+    if(r.killed){document.getElementById('liveStatus').textContent='🛑 Safety stop triggered — robot stopped.';}
+    return; }
+  document.getElementById('lv_price').textContent=r.price;
+  document.getElementById('lv_roi').innerHTML=(r.roi_pct>=0?'<span class="up">+':'<span class="down">')+r.roi_pct+'%</span>';
+  document.getElementById('lv_equity').textContent=fmt(r.equity)+' / '+fmt(r.investment);
+  document.getElementById('lv_fills').textContent=r.matched_buys+' / '+r.matched_sells+' ('+r.round_trips+' round-trips)';
+  drawProfitAt('liveChart',r.profit_curve.length>1?r.profit_curve:[r.investment,r.equity]);
+  if(r.behavior){
+    const b=r.behavior;
+    document.getElementById('lv_behavior').textContent=
+      'Live humans: '+b.pressure+' · '+Math.round((b.buy_ratio||0.5)*100)+'% buy vs '+
+      Math.round((b.sell_ratio||0.5)*100)+'% sell ('+(b.source||'')+')';
+  }
+}
+async function liveStop(){
+  const r=await (await fetch('/api/live/stop')).json();
+  document.getElementById('stopBtn').style.display='none';
+  document.getElementById('liveStatus').textContent=r.message||'Stopped.';
+  if(liveTimer){clearInterval(liveTimer);liveTimer=null;}
+}
+async function preview(){
+  const r=await post('/api/preview',lvPayload());
+  document.getElementById('prevNote').textContent='🕘 Past preview: ROI '+r.roi_pct+'% over '+
+    r.matched_trades_total+' matched fills ('+r.data_source+'). Tap "Show Bot Details" for the chart.';
+  botDetailsData(r);
+}
+function drawProfitAt(id,pts){
+  const svg=document.getElementById(id); if(!svg)return; svg.innerHTML='';
+  if(!pts||pts.length<2)pts=[pts[0]||0,(pts[0]||0)];
+  const W=600,H=130,pad=8,min=Math.min(...pts),max=Math.max(...pts),rng=(max-min)||1;
+  const xy=pts.map((p,i)=>[pad+i*(W-2*pad)/(pts.length-1),H-pad-(p-min)/rng*(H-2*pad)]);
+  const d=xy.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const col=pts[pts.length-1]>=pts[0]?'#29c484':'#ff6b6b';
+  svg.innerHTML=`<path d="${d} L${W-pad} ${H-pad} L${pad} ${H-pad} Z" fill="${col}" opacity="0.12"/><path d="${d}" fill="none" stroke="${col}" stroke-width="2.5"/>`;
+}
 async function post(path,body){
   const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   return r.json();
@@ -301,15 +397,18 @@ async function askAI(){
 }
 function quick(t){ document.getElementById('ask').value=t; askAI(); }
 async function botDetails(){
-  const v=vals();
-  const b=await post('/api/botdetails',v);
+  const b=await post('/api/botdetails',vals());
+  botDetailsData(b);
+}
+function botDetailsData(b){
   document.getElementById('botCard').style.display='block';
   document.getElementById('b_roi').innerHTML = (b.roi_pct>=0?'<span class="up">':'<span class="down">')+b.roi_pct+'%</span>';
   document.getElementById('b_pnl').innerHTML = (b.pnl>=0?'<span class="up">+':'<span class="down">')+fmt(b.pnl)+'</span>';
   document.getElementById('b_trades').textContent = b.matched_trades_total+' matched';
   document.getElementById('b_ppg').textContent = b.profit_per_grid_pct+'%';
+  const src=b.data_source?(' · '+b.data_source):'';
   document.getElementById('b_info').textContent =
-    `${b.symbol} · ${b.mode} · ${b.grids} grids · range ${b.lower}–${b.upper} · fees ${fmt(b.fees)} · `+
+    `${b.symbol} · ${b.mode} · ${b.grids} grids · range ${b.lower}–${b.upper} · fees ${fmt(b.fees)}${src} · `+
     (b.stopped?'safety stop triggered':'still running safely');
   drawProfit(b.profit_curve);
   drawPreview(b.preview);

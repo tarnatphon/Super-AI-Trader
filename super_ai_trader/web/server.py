@@ -17,6 +17,23 @@ from ..grid.advisor import advise, plain_language
 from ..security.vault import Vault, security_checklist, platform_security_note
 from ..ai.commands import run_command
 
+_SESSION = {"live": None}
+
+
+def _exchanges_ok() -> bool:
+    try:
+        import ccxt  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _real_bars(exchange_id: str, symbol: str, timeframe: str = "1h", limit: int = 600):
+    """Real historical candles from the exchange. Raises if ccxt/network unavailable."""
+    from ..exchange.connector import ExchangeConnector
+    conn = ExchangeConnector(exchange_id, paper=True)
+    return conn.ohlcv(symbol, timeframe=timeframe, limit=limit)
+
 
 def _simulate(payload: dict) -> dict:
     ticker = payload.get("ticker", "BTC")
@@ -89,6 +106,91 @@ def _autoset(payload: dict) -> dict:
     }
 
 
+def _preview(payload: dict) -> dict:
+    """PAST result over REAL exchange candles (the Preview), with a labeled fallback."""
+    from ..grid.summary import bot_summary
+    ticker = payload.get("ticker", "SOL")
+    exchange = payload.get("exchange", "binance")
+    symbol = f"{ticker}/USDT"
+    investment = float(payload.get("investment", 1_000))
+    range_pct = float(payload.get("range_pct", 12))
+    grids = int(payload.get("grids", 25))
+    mode = payload.get("mode", "geometric")
+    fee = float(payload.get("fee", 0.1))
+    source = "LIVE exchange history"
+    try:
+        bars = _real_bars(exchange, symbol, timeframe=payload.get("timeframe", "1h"), limit=600)
+        if len(bars) < 50:
+            raise RuntimeError("not enough candles")
+    except Exception as e:
+        bars = get_series(ticker, days=600, real=False)
+        source = f"practice data (live feed unavailable: install ccxt + internet; {type(e).__name__})"
+    ref = bars[0].close
+    cfg = GridConfig(symbol=symbol,
+                     lower=ref * (1 - range_pct / 100), upper=ref * (1 + range_pct / 100),
+                     grids=grids, mode=mode, investment=investment, fee_pct=fee,
+                     range_pct=range_pct,
+                     stop_loss_price=ref * (1 - range_pct * 2 / 100),
+                     take_profit_price=ref * (1 + range_pct * 2 / 100))
+    res = simulate_on_bars(cfg, bars)
+    summary = bot_summary(cfg, res, bars)
+    summary["data_source"] = source
+    return summary
+
+
+def _live_start(payload: dict) -> dict:
+    """Start a live PAPER session trading real exchange prices."""
+    from ..exchange.connector import ExchangeConnector
+    from ..exchange.live_session import LiveSession
+    from ..data.live_behavior import fetch_live_behavior
+    exchange = payload.get("exchange", "binance")
+    symbol = f"{payload.get('ticker','SOL')}/USDT"
+    investment = float(payload.get("investment", 1_000))
+    range_pct = float(payload.get("range_pct", 12))
+    grids = int(payload.get("grids", 25))
+    mode = payload.get("mode", "geometric")
+
+    existing = _SESSION["live"]
+    if existing is not None and not existing.stopped:
+        return {"ok": False, "error": "a live session is already running — stop it first"}
+
+    conn = ExchangeConnector(exchange, paper=True, paper_usdt=investment)
+    try:
+        ref = conn.price(symbol)
+    except Exception as e:
+        return {"ok": False, "error": f"cannot reach {exchange}: {e}. "
+                "Run `pip install ccxt` and check internet. No real orders are sent in paper mode."}
+    cfg = GridConfig(symbol=symbol,
+                     lower=ref * (1 - range_pct / 100), upper=ref * (1 + range_pct / 100),
+                     grids=grids, mode=mode, investment=investment, fee_pct=0.1,
+                     range_pct=range_pct,
+                     stop_loss_price=ref * (1 - range_pct * 2 / 100),
+                     take_profit_price=ref * (1 + range_pct * 2 / 100))
+    sess = LiveSession(conn, cfg, poll_seconds=float(payload.get("poll", 5)),
+                       behavior_fn=lambda: fetch_live_behavior(exchange, symbol))
+    sess.start()
+    _SESSION["live"] = sess
+    return {"ok": True, "message": f"Live PAPER trading started on {exchange} {symbol} at {ref:.4f} "
+                                   f"(real prices, practice money — no orders sent).",
+            "status": sess.status()}
+
+
+def _live_status() -> dict:
+    sess = _SESSION["live"]
+    if sess is None or sess.stopped:
+        return {"running": False}
+    return {"running": True, **sess.status()}
+
+
+def _live_stop() -> dict:
+    sess = _SESSION["live"]
+    if sess is None:
+        return {"ok": False, "error": "no session"}
+    sess.stop()
+    final = sess.status()
+    return {"ok": True, "message": "Live session stopped. Orders (paper) cancelled.", "final": final}
+
+
 def _botdetails(payload: dict) -> dict:
     from ..grid.summary import bot_summary
     ticker = payload.get("ticker", "BTC")
@@ -153,6 +255,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send({"checklist": security_checklist()})
         elif u.path == "/api/connections":
             self._send(_list_connections())
+        elif u.path == "/api/live/status":
+            self._send(_live_status())
+        elif u.path == "/api/capabilities":
+            self._send({"ccxt": _exchanges_ok()})
+        elif u.path == "/api/live/stop":
+            self._send(_live_stop())
         else:
             self._send({"error": "not found"}, 404)
 
@@ -173,6 +281,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(run_command(payload.get("text", "")))
         elif u.path == "/api/botdetails":
             self._send(_botdetails(payload))
+        elif u.path == "/api/preview":
+            self._send(_preview(payload))
+        elif u.path == "/api/live/start":
+            self._send(_live_start(payload))
         else:
             self._send({"error": "not found"}, 404)
 
