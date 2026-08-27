@@ -1,0 +1,6 @@
+# Core system runs on the Python standard library only.
+# These are optional extras that unlock more features:
+
+yfinance>=0.2.40        # real market data:  --real
+openai>=1.30.0          # LLM agents:        --llm  (also works with Ollama/DeepSeek/Groq via LLM_BASE_URL)
+pytest>=8.0.0           # running tests
