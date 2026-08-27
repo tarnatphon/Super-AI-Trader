@@ -22,6 +22,34 @@ class LiveGridRunner:
         self.orders: list[Order] = []
         self.round_trips = 0
         self.running = False
+        self.pause_buys = False   # set True by the AI regime filter in a downtrend
+
+    def _quote_per_buy(self) -> float:
+        return self.cfg.investment / max(1, len(self.lines[:-1]))
+
+    def _arm_buys(self, price: float):
+        """Place the buy ladder below `price` (skip slots that already have an order)."""
+        for p in self.lines[:-1]:
+            if p < price and not any(
+                o.side == "buy" and abs(o.price - p) < 1e-9 for o in self.orders
+            ):
+                o = self.conn.place_limit_buy(self.cfg.symbol, self._quote_per_buy() / p, p)
+                self.orders.append(o)
+
+    def _cancel_buys(self):
+        """Cancel resting BUY orders (keep sells so inventory can still exit)."""
+        for o in list(self.orders):
+            if o.side == "buy":
+                self.conn.cancel(o)
+                self.orders.remove(o)
+
+    def set_paused(self, paused: bool, price: float | None = None):
+        """AI regime filter: pause new buying in a strong trend, resume in a range."""
+        if paused and not self.pause_buys:
+            self._cancel_buys()
+        elif not paused and self.pause_buys and price is not None:
+            self._arm_buys(price)
+        self.pause_buys = paused
 
     def setup(self):
         price = self.conn.price(self.cfg.symbol)
@@ -31,11 +59,7 @@ class LiveGridRunner:
         quote_per_buy = self.cfg.investment / len(self.lines[:-1])
         # Place buy ladders below price and one sell above each buy.
         start_price = price
-        for i, p in enumerate(self.lines[:-1]):
-            if p < start_price:
-                amt = quote_per_buy / p
-                o = self.conn.place_limit_buy(self.cfg.symbol, amt, p)
-                self.orders.append(o)
+        self._arm_buys(start_price)
         return {"price": price, "lines": self.lines, "buy_orders": len(self.orders)}
 
     def shutdown(self):
@@ -59,13 +83,16 @@ class LiveGridRunner:
                     self.orders.append(so)
             elif o.side == "sell":
                 self.round_trips += 1
-                below = [p for p in self.lines if p < o.price]
-                if below:
-                    buy_px = below[-1]
-                    quote = o.amount * o.price
-                    bo = self.conn.place_limit_buy(self.cfg.symbol, quote / buy_px, buy_px)
-                    self.orders.append(bo)
+                # Re-arm a buy one step below only when the regime filter allows it.
+                if not self.pause_buys:
+                    below = [p for p in self.lines if p < o.price]
+                    if below:
+                        buy_px = below[-1]
+                        quote = o.amount * o.price
+                        bo = self.conn.place_limit_buy(self.cfg.symbol, quote / buy_px, buy_px)
+                        self.orders.append(bo)
         info["round_trips"] = self.round_trips
+        info["paused"] = self.pause_buys
 
         # Kill switch.
         if self.cfg.stop_loss_price and price <= self.cfg.stop_loss_price:

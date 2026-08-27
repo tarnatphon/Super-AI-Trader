@@ -35,8 +35,19 @@ class LiveSession:
         self.last_behavior: dict | None = None
         self.killed: dict | None = None
         self.start_price = None
+        self.regime: dict | None = None
         self._seen_fills = 0
         self._lock = threading.Lock()
+
+    def _recent_bars(self, limit: int = 120):
+        """Candles up to now — replay uses the cursor, live fetches from the exchange."""
+        conn = self.conn
+        if hasattr(conn, "bars") and hasattr(conn, "cursor"):
+            return conn.bars[max(0, conn.cursor - limit):conn.cursor + 1]
+        try:
+            return conn.ohlcv(self.cfg.symbol, timeframe="1h", limit=limit)
+        except Exception:
+            return []
 
     def start(self):
         self.setup_info = self.runner.setup()
@@ -56,7 +67,18 @@ class LiveSession:
     def step(self) -> dict:
         """One live poll: fetch real price, match orders, record results."""
         price = self.conn.price(self.cfg.symbol)
-        before = len(self.conn.fills)
+
+        # AI regime filter: pause buying in strong trends (protect the grid).
+        try:
+            from ..grid.regime import regime_gate
+            bars = self._recent_bars()
+            if len(bars) >= 40:
+                gate = regime_gate(bars, self.cfg)
+                self.regime = gate
+                self.runner.set_paused(not gate["active"], price)
+        except Exception:
+            pass
+
         info = self.runner.cycle_once(price)
         # record new fills
         for o in self.conn.fills[self._seen_fills:]:
@@ -113,6 +135,8 @@ class LiveSession:
             "matched_sells": sells,
             "round_trips": self.runner.round_trips,
             "open_orders": len(self.runner.orders),
+            "paused": self.runner.pause_buys,
+            "regime": self.regime,
             "lower": round(self.cfg.lower, 6),
             "upper": round(self.cfg.upper, 6),
             "grids": self.cfg.grids,

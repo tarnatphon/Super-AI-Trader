@@ -191,6 +191,42 @@ def volume_ma(bars, period: int = 10):
     return sma([b.volume for b in bars], period)
 
 
+def adx(bars, period: int = 14):
+    """Average Directional Index (trend strength). Returns (adx, plus_di, minus_di)
+    series. ADX >= ~25 means a strong trend (direction doesn't matter); < ~20 is a range."""
+    n = len(bars)
+    adx_s = [None] * n
+    plus_di = [None] * n
+    minus_di = [None] * n
+    if n < period * 2:
+        return adx_s, plus_di, minus_di
+    tr = [0.0]; plus_dm = [0.0]; minus_dm = [0.0]
+    for i in range(1, n):
+        up = bars[i].high - bars[i - 1].high
+        down = bars[i - 1].low - bars[i].low
+        plus_dm.append(up if up > down and up > 0 else 0.0)
+        minus_dm.append(down if down > up and down > 0 else 0.0)
+        tr.append(max(bars[i].high - bars[i].low,
+                      abs(bars[i].high - bars[i - 1].close),
+                      abs(bars[i].low - bars[i - 1].close)))
+    # Wilder smoothing
+    atr_s = sum(tr[1:period + 1])
+    p_s = sum(plus_dm[1:period + 1])
+    m_s = sum(minus_dm[1:period + 1])
+    dx = []
+    for i in range(period + 1, n):
+        atr_s = atr_s - atr_s / period + tr[i]
+        p_s = p_s - p_s / period + plus_dm[i]
+        m_s = m_s - m_s / period + minus_dm[i]
+        pdi = 100 * p_s / atr_s if atr_s else 0
+        mdi = 100 * m_s / atr_s if atr_s else 0
+        plus_di[i] = pdi; minus_di[i] = mdi
+        dx.append(100 * abs(pdi - mdi) / (pdi + mdi) if (pdi + mdi) else 0.0)
+        if len(dx) >= period:
+            adx_s[i] = sum(dx[-period:]) / period
+    return adx_s, plus_di, minus_di
+
+
 def snapshot(bars, idx: int) -> dict:
     """A compact feature snapshot at bar index `idx` for agents/strategies."""
     return snapshot_pre(precompute(bars), bars, idx)

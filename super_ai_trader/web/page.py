@@ -77,6 +77,10 @@ HTML = r"""<!doctype html>
   .msg{border-radius:12px;padding:12px 16px;margin:10px 0;font-size:17px;line-height:1.5}
   .msg.you{background:rgba(74,163,255,.10);border:1px solid rgba(74,163,255,.3)}
   .msg.ai{background:rgba(41,196,132,.10);border:1px solid rgba(41,196,132,.35);white-space:pre-wrap}
+  .regime-on{display:inline-block;margin-top:10px;padding:8px 14px;border-radius:999px;font-weight:700;font-size:15px;
+    background:rgba(41,196,132,.15);border:1px solid rgba(41,196,132,.45);color:#9af0cd}
+  .regime-off{display:inline-block;margin-top:10px;padding:8px 14px;border-radius:999px;font-weight:700;font-size:15px;
+    background:rgba(255,193,77,.15);border:1px solid rgba(255,193,77,.45);color:#ffe2a8}
   @media(max-width:560px){.metrics{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
 </style>
 </head>
@@ -220,6 +224,7 @@ HTML = r"""<!doctype html>
     </div>
     <button class="btn" style="background:#3a2030;color:#ffb3b3;margin-top:10px;display:none" id="stopBtn" onclick="liveStop()">⏹️ STOP the robot</button>
     <div id="liveStatus" class="fine"></div>
+    <div id="regimeBadge" class="regime-on" style="display:none"></div>
     <div id="liveBox" style="display:none">
       <div class="metrics">
         <div class="metric"><div class="k">Live price</div><div class="v" id="lv_price">–</div></div>
@@ -346,8 +351,18 @@ async function liveStart(){
   if(liveTimer)clearInterval(liveTimer);
   liveTimer=setInterval(livePoll,5000); livePoll();
 }
+function showRegime(r){
+  const b=document.getElementById('regimeBadge');
+  if(!r.regime){ b.style.display='none'; return; }
+  const g=r.regime;
+  b.style.display='inline-block';
+  b.className = g.active ? 'regime-on' : 'regime-off';
+  b.textContent = g.active
+    ? '✅ Grid ON — '+g.reason : '⏸️ Grid PAUSED — '+g.reason;
+}
 async function livePoll(){
   const r=await (await fetch('/api/live/status')).json();
+  showRegime(r);
   if(!r.running){ if(liveTimer){clearInterval(liveTimer);liveTimer=null;}
     document.getElementById('stopBtn').style.display='none';
     if(r.killed){document.getElementById('liveStatus').textContent='🛑 Safety stop triggered — robot stopped.';}
@@ -392,6 +407,7 @@ function replayRender(r){
   document.getElementById('rp_prog').textContent=r.progress_pct+'%';
   const curve=r.profit_curve.length>1?r.profit_curve:[r.investment, r.equity||r.investment];
   drawProfitAt('replayChart',curve);
+  showRegime(r);
   if(r.finished){ if(replayTimer){clearInterval(replayTimer);replayTimer=null;}
     document.getElementById('rp_source').textContent+='  ✅ Replay finished.'; }
 }

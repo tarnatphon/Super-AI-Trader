@@ -290,6 +290,47 @@ def test_live_session_steps_with_fake_feed():
     sess.stop()
 
 
+def _trend_bars(drift, n=120, noise=0.003, seed=1):
+    import random
+    from super_ai_trader.data.market import Bar
+    rng = random.Random(seed); bars = []; p = 100.0
+    for i in range(n):
+        p *= (1 + drift + rng.gauss(0, noise))
+        bars.append(Bar(str(i), p, p * 1.002, p * 0.998, p, 1e6))
+    return bars
+
+
+def test_regime_gate_detects_trend_vs_range():
+    from super_ai_trader.grid.engine import GridConfig
+    from super_ai_trader.grid.regime import regime_gate
+    cfg = GridConfig(symbol="X/USDT", lower=88, upper=112, grids=25,
+                     mode="geometric", investment=1000, fee_pct=0.1)
+    down = regime_gate(_trend_bars(-0.004), cfg)
+    up = regime_gate(_trend_bars(0.004), cfg)
+    rng = regime_gate(_trend_bars(0.0, noise=0.02), cfg)
+    assert down["status"] == "strong_down" and down["active"] is False
+    assert up["status"] == "strong_up"
+    assert rng["status"] == "range" and rng["active"] is True
+
+
+def test_regime_pauses_buying_in_downtrend():
+    from super_ai_trader.grid.engine import GridConfig
+    from super_ai_trader.exchange.replay import ReplayConnector, ReplaySession
+    cfg = GridConfig(symbol="X/USDT", lower=88, upper=112, grids=25,
+                     mode="geometric", investment=1000, fee_pct=0.1)
+    conn = ReplayConnector(_trend_bars(-0.004, n=200), paper_usdt=1000)
+    sess = ReplaySession(conn, cfg)
+    sess.start()
+    pauses = 0
+    for _ in range(210):
+        sess.step()
+        if sess.runner.pause_buys:
+            pauses += 1
+    assert pauses > 100  # buying was paused through the downtrend
+    assert sess.status()["paused"] is True
+    sess.stop()
+
+
 def test_bot_summary_shape():
     from super_ai_trader.data.market import make_synthetic_series
     from super_ai_trader.grid.engine import GridConfig, simulate_on_bars
