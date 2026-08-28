@@ -316,6 +316,10 @@ HTML = r"""<!doctype html>
       <label style="margin-top:12px">💰 Live profit curve</label>
       <svg id="liveChart" viewBox="0 0 600 140" preserveAspectRatio="none"></svg>
       <div class="fine" id="lv_behavior"></div>
+      <label style="margin-top:10px;display:flex;gap:8px;align-items:center;font-weight:700">
+        <input type="checkbox" id="notifyOn" style="width:auto"> Notify me (browser alerts on lock/pause)
+      </label>
+      <div id="lv_events" style="margin-top:8px"></div>
     </div>
     <div id="prevNote" class="fine"></div>
   </div>
@@ -549,6 +553,7 @@ async function livePoll(){
   document.getElementById('lv_equity').textContent=fmt(r.equity)+' / '+fmt(r.investment);
   document.getElementById('lv_fills').textContent=r.matched_buys+' / '+r.matched_sells+' ('+r.round_trips+' round-trips)';
   drawProfitAt('liveChart',r.profit_curve.length>1?r.profit_curve:[r.investment,r.equity]);
+  renderEvents(r.events);
   if(r.behavior){
     const b=r.behavior;
     document.getElementById('lv_behavior').textContent=
@@ -971,6 +976,39 @@ async function realCancelAll(){
     symbol:document.getElementById('ex').value==='gateio'?(document.getElementById('cname').value):null});
   el.style.color = r.ok?'#9af0cd':'#ffc7c7';
   el.textContent = r.ok ? ('&#x2705; '+r.message) : ('&#x26A0;&#xFE0F; '+r.error);
+}
+
+let _seenEvents=new Set();
+function colorSpan(c){ return c==='green'?'var(--green)':c==='amber'?'#ffd54a':c==='red'?'var(--red)':'var(--muted)'; }
+function toast(text,color){
+  const t=document.createElement('div');
+  t.textContent=text;
+  t.style.cssText='position:fixed;top:18px;left:50%;transform:translateX(-50%);background:#161f2e;border:1px solid '+colorSpan(color||'green')+';color:'+colorSpan(color||'green')+';padding:12px 18px;border-radius:12px;z-index:60;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:90vw';
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),6000);
+}
+function renderEvents(events){
+  const box=document.getElementById('lv_events');
+  if(!box||!events) return;
+  box.innerHTML=events.slice().reverse().map(e=>
+    `<div style="padding:7px 10px;margin:5px 0;border-radius:8px;background:var(--card2);border:1px solid var(--line);color:${colorSpan(e.color)};font-size:15px">${new Date(e.ts*1000).toLocaleTimeString()} · ${e.text}</div>`
+  ).join('');
+  // new-event toasts + browser notifications (important kinds only)
+  events.forEach(e=>{
+    const key=e.ts+'|'+e.text;
+    if(!_seenEvents.has(key)){
+      _seenEvents.add(key);
+      if(e.kind && e.kind!=='info' && _seenEvents.size>0){
+        toast(e.text, e.color);
+        if(document.getElementById('notifyOn')&&document.getElementById('notifyOn').checked && e.kind!=='roundtrip'){
+          try{
+            if(Notification&&Notification.permission==='granted'){ new Notification('Super-AI-Trader',{body:e.text}); }
+            else if(Notification&&Notification.permission!=='denied'){ Notification.requestPermission(); }
+          }catch(_){}
+        }
+      }
+    }
+  });
 }
 </script>
 </body>

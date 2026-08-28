@@ -34,6 +34,10 @@ class LiveSession:
         self.fill_log: list[dict] = []     # every matched buy/sell
         self.setup_info: dict = {}
         self.last_behavior: dict | None = None
+        self.events: list[dict] = []          # human-readable alerts (newest last)
+        self._seen_fills = 0
+        self._regime_state = None
+        self._trail_state = None
         self.killed: dict | None = None
         self.start_price = None
         self.regime: dict | None = None
@@ -94,8 +98,14 @@ class LiveSession:
         with self._lock:
             self.ticks.append({"t": time.time(), "price": round(price, 6),
                                "equity": round(equity, 2) if equity else None})
+
+        # --- human-readable alerts (the AI "telling you" what it did) ---
+        self._emit_events(price, info)
+
         if info.get("killed"):
             self.killed = info
+            self._push_event("🛑 Safety stop triggered — robot stopped all orders.",
+                             "stop", "red")
             self.stop()
         # behavior (order book) — best effort
         if self.behavior_fn and len(self.ticks) % 6 == 0:
@@ -104,6 +114,51 @@ class LiveSession:
             except Exception:
                 self.last_behavior = None
         return info
+
+    def _push_event(self, text: str, kind: str = "info", color: str = "muted"):
+        with self._lock:
+            self.events.append({"ts": time.time(), "text": text,
+                                 "kind": kind, "color": color})
+            self.events = self.events[-30:]  # keep a short feed
+
+    def _emit_events(self, price: float, info: dict):
+        """Detect meaningful changes and announce them (once per change)."""
+        # Regime on/off transitions (announce pauses/resumes, including first).
+        if self.regime is not None:
+            st = self.regime.get("status")
+            if st != self._regime_state:
+                if not self.regime.get("active", True):
+                    self._push_event(
+                        f"⏸️ Grid PAUSED — {self.regime.get('reason','trend detected')}",
+                        "regime_off", "amber")
+                elif self._regime_state is not None and st in ("range",):
+                    self._push_event("✅ Grid back ON — market in range again.",
+                                     "regime_on", "green")
+                self._regime_state = st
+        # Trailing smart-exit state changes (lock profit).
+        try:
+            path = [t["price"] for t in self.ticks if t.get("price")]
+            if len(path) >= 6:
+                from ..grid.trailing_visual import simulate_trailing
+                tr = simulate_trailing(path, arm_pct=5.0, giveback_pct=1.0)
+                if tr["state"] != self._trail_state:
+                    if tr["state"] == "holding" and self._trail_state in (None, "watching"):
+                        self._push_event(
+                            f"🟢 Trailing ON — runner up, holding for more (exit if it reverses).",
+                            "trail_arm", "amber")
+                    if tr["state"] == "locked":
+                        self._push_event(
+                            f"🔒 Smart exit LOCKED +{tr.get('locked_gain_pct')}% — profit banked.",
+                            "trail_lock", "green")
+                    self._trail_state = tr["state"]
+        except Exception:
+            pass
+        # Round-trip completions (a sell matched = a small win collected).
+        rt = self.runner.round_trips
+        if rt > getattr(self, "_last_rt", 0):
+            self._push_event(f"✅ Grid completed a buy→sell cycle ({rt} total).",
+                             "roundtrip", "green")
+        self._last_rt = rt
 
     def stop(self):
         self.running = False
@@ -164,5 +219,6 @@ class LiveSession:
             "price_curve": [t["price"] for t in ticks],
             "recent_fills": fills[-12:],
             "behavior": self.last_behavior,
+            "events": list(self.events)[-12:],
             "poll_seconds": self.poll_seconds,
         }
