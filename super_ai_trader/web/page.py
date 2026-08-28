@@ -381,6 +381,8 @@ HTML = r"""<!doctype html>
 
     <div style="margin-top:18px;border-top:1px dashed var(--line);padding-top:14px">
       <h2 style="color:#ffc7c7;font-size:19px">&#x1F534; REAL-MONEY multi-coin grids</h2>
+      <button class="btn btn-gray" style="margin:6px 0" onclick="livePreflight()">&#x2705; Run safety checklist before starting</button>
+      <div id="lg_checks" style="margin:6px 0 10px"></div>
       <p class="help">This places REAL orders using your unlocked trade-only key. Withdrawals stay OFF
         and total buys are capped. Steps: build &rarr; review &rarr; type I AGREE &rarr; arm.</p>
       <div class="row">
@@ -1260,6 +1262,24 @@ async function liveGridStop(){
   const r=await post('/api/livegrid/stop',{});
   el.style.color='#9af0cd';
   el.textContent='&#x23F9; Stopped; real orders cancelled.';
+}
+
+async function livePreflight(){
+  const box=document.getElementById('lg_checks');
+  box.innerHTML='<div class="fine">Checking safety preconditions…</div>';
+  const r=await post('/api/livegrid/preflight',{
+    name:document.getElementById('lg_name').value,
+    password:document.getElementById('lg_pw').value,
+    max_spend:document.getElementById('lg_cap').value,
+    confirm:document.getElementById('lg_agree').value});
+  const rows=(r.steps||[]).map(st=>
+    `<div style="padding:7px 10px;margin:4px 0;border-radius:8px;background:var(--card2);border:1px solid var(--line)">`+
+    `<b>${st.ok?'<span class="up">&#x2714;</span>':'<span style="color:#ffd54a">&#x25CB;</span>'} ${st.label}</b>`+
+    (st.ok?'':`<div class="fine">&#x2192; ${st.fix}</div>`)+`</div>`).join('');
+  box.innerHTML=rows+
+    (r.ready
+      ? '<div style="color:#9af0cd;font-weight:700;margin-top:6px">All checks passed — ready to Build then Arm.</div>'
+      : '<div style="color:#ffd54a;font-weight:700;margin-top:6px">Finish the items above before going live.</div>');
 }
 </script>
 </body>

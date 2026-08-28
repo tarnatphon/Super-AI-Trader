@@ -135,6 +135,60 @@ def _multigrid_daily_retune() -> dict:
     return get_manager().maybe_daily_retune()
 
 
+def _live_preflight(payload: dict) -> dict:
+    """Readiness checks before arming REAL grids. Returns steps with ok flags."""
+    from ..security.vault import Vault
+    name = payload.get("name", payload.get("exchange", "binance"))
+    password = payload.get("password", "")
+    try:
+        cap = float(payload.get("max_spend", 0) or 0)
+    except Exception:
+        cap = 0.0
+    steps = []
+
+    # 1) a saved key exists (and can be unlocked if password given)
+    names = Vault().list_names()
+    key_saved = name in names
+    steps.append({"id": "key", "label": "A trade-only exchange key is saved",
+                  "ok": key_saved,
+                  "fix": "Save a key in 'Connect an exchange' (trade-only, withdrawals OFF)."})
+    key_ok = False
+    if key_saved and password:
+        try:
+            Vault().load(name, password)
+            key_ok = True
+        except Exception:
+            key_ok = False
+    steps.append({"id": "unlock", "label": "Vault password unlocks the key",
+                  "ok": key_ok,
+                  "fix": "Enter your vault password."})
+
+    # 2) small cap (encourage starting tiny)
+    steps.append({"id": "cap",
+                  "label": f"Spend cap is set and small (suggested &le; 100 USDT to start; you set {cap:g})",
+                  "ok": 0 < cap <= 500,
+                  "fix": "Set a small Max spend per coin (e.g. 50)."})
+
+    # 3) paper tested (journal has runs)
+    try:
+        from ..journal import stats
+        st = stats()
+        paper_runs = st.get("runs", 0)
+    except Exception:
+        paper_runs = 0
+    steps.append({"id": "paper",
+                  "label": f"You practiced in paper/time-machine (runs recorded: {paper_runs})",
+                  "ok": paper_runs > 0,
+                  "fix": "Run a Time Machine or paper grid first to build trust."})
+
+    # 4) the 'I AGREE' confirmation
+    steps.append({"id": "agree", "label": "You will type I AGREE to arm (withdrawals stay impossible)",
+                  "ok": str(payload.get("confirm", "")).strip().upper() == "I AGREE",
+                  "fix": "Type I AGREE when you're ready."})
+    ready = all(x["ok"] for x in steps)
+    return {"ready": ready, "steps": steps}
+
+
 def _live_grid_prepare(payload: dict) -> dict:
     from ..exchange.live_multigrid import get_live_manager
     lm = get_live_manager()
@@ -776,6 +830,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_notify_test(payload))
         elif u.path == "/api/multigrid/daily-retune":
             self._send(_multigrid_daily_retune())
+        elif u.path == "/api/livegrid/preflight":
+            self._send(_live_preflight(payload))
         elif u.path == "/api/livegrid/prepare":
             self._send(_live_grid_prepare(payload))
         elif u.path == "/api/livegrid/arm":
