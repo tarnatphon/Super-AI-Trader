@@ -379,7 +379,7 @@ function vals(){
   };
 }
 async function refreshPresets(){
-  const r=await (await fetch('/api/preset/list')).json();
+  const r=await (await fetch(_auth('/api/preset/list'))).json();
   const sel=document.getElementById('presetList');
   sel.innerHTML='<option value="">— load a saved preset —</option>'+
     (r.presets||[]).map(p=>`<option value="${p.name}">💾 ${p.name}</option>`).join('');
@@ -395,7 +395,7 @@ async function savePreset(){
 async function loadPreset(){
   const name=document.getElementById('presetList').value;
   if(!name) return;
-  const r=await (await fetch('/api/preset/load?name='+encodeURIComponent(name))).json();
+  const r=await (await fetch(_auth('/api/preset/load?name='+encodeURIComponent(name)))).json();
   const s=r.settings; if(!s) return;
   if(s.ticker) document.getElementById('ticker').value=s.ticker;
   if(s.investment) document.getElementById('investment').value=s.investment;
@@ -486,7 +486,7 @@ function showRegime(r){
   }
 }
 async function livePoll(){
-  const r=await (await fetch('/api/live/status')).json();
+  const r=await (await fetch(_auth('/api/live/status'))).json();
   showRegime(r);
   if(!r.running){ if(liveTimer){clearInterval(liveTimer);liveTimer=null;}
     document.getElementById('stopBtn').style.display='none';
@@ -505,7 +505,7 @@ async function livePoll(){
   }
 }
 async function liveStop(){
-  const r=await (await fetch('/api/live/stop')).json();
+  const r=await (await fetch(_auth('/api/live/stop'))).json();
   document.getElementById('stopBtn').style.display='none';
   document.getElementById('liveStatus').textContent=r.message||'Stopped.';
   if(liveTimer){clearInterval(liveTimer);liveTimer=null;}
@@ -553,8 +553,10 @@ function drawProfitAt(id,pts){
   const col=pts[pts.length-1]>=pts[0]?'#29c484':'#ff6b6b';
   svg.innerHTML=`<path d="${d} L${W-pad} ${H-pad} L${pad} ${H-pad} Z" fill="${col}" opacity="0.12"/><path d="${d}" fill="none" stroke="${col}" stroke-width="2.5"/>`;
 }
+function _tok(){ return localStorage.getItem('sat_token') || ''; }
+function _auth(path){ const t=_tok(); if(!t) return path; return path+(path.includes('?')?'&':'?')+'token='+encodeURIComponent(t); }
 async function post(path,body){
-  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const r=await fetch(_auth(path),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   return r.json();
 }
 function addMsg(who,text){
@@ -720,11 +722,12 @@ async function realArm(){
   el.textContent = r.ok ? ('🔴 LIVE ARMED — '+r.message) : ('⚠️ '+r.error);
 }
 async function loadChecklist(){
-  const r=await (await fetch('/api/checklist')).json();
+  const r=await (await fetch(_auth('/api/checklist'))).json();
   document.getElementById('checklist').innerHTML = r.checklist.map(c=>
     `<li><span class="tick">✔</span><span>${c.title}${c.must?'<span class="must">IMPORTANT</span>':''}
      <div class="fine">${c.detail}</div></span></li>`).join('');
 }
+(function(){const q=new URLSearchParams(location.search);const t=q.get('token');if(t){localStorage.setItem('sat_token',t);}})();
 loadChecklist();
 refreshPresets();
 loadMarket();

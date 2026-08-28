@@ -76,23 +76,39 @@ def open_native_window(url: str) -> bool:
         return False
 
 
-def launch(port: int | None = None, open_window: bool = True, window: bool = True) -> None:
+def launch(port: int | None = None, open_window: bool = True, window: bool = True,
+           host: str | None = None, token: str | None = None) -> None:
     from .web.server import make_server
     import threading
 
     port = port or find_free_port()
-    url = f"http://127.0.0.1:{port}"
-    server = make_server("127.0.0.1", port)
+    # Default to localhost. For phone remote control, pass host="100.x" (your
+    # Tailscale address) + a token — NEVER 0.0.0.0/public.
+    if host is None:
+        host = "127.0.0.1"
+    url = f"http://{host}:{port}"
+    try:
+        server = make_server(host, port)
+    except OSError:
+        # can't bind that address (e.g. no Tailscale) — fall back to localhost
+        host = "127.0.0.1"
+        url = f"http://{host}:{port}"
+        server = make_server(host, port)
+    if token:
+        server.access_token = token  # enables token-gated remote access
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
 
+    remote = host not in ("127.0.0.1", "localhost")
     banner = (
         "\n==========================================================\n"
         "  Super-AI-Trader is starting...\n"
-        f"  Local address:  {url}\n"
-        "  (Runs only on YOUR computer — not reachable from the internet.)\n"
-        "\n"
-        "  KEEP THIS WINDOW OPEN while you use the app.\n"
+        f"  Address:  {url}\n"
+        + ("  REMOTE mode — reachable on your private network (Tailscale).\n"
+           "  Keep this on a password-protected / VPN-only address.\n"
+           if remote else
+           "  Local mode — only THIS computer can reach it.\n")
+        + "\n  KEEP THIS WINDOW OPEN while you use the app.\n"
         "  Close the app window (or Ctrl+C here) to STOP.\n"
         "==========================================================\n"
     )

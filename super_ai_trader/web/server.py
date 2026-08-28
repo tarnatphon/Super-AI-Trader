@@ -402,16 +402,39 @@ def _list_connections() -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
+    access_token: str | None = None  # when set, non-local requests must present it
+
     def log_message(self, *a):  # quiet; don't log request data
         pass
 
+    def _authorized(self) -> bool:
+        # Local requests are always allowed. Requests from another device
+        # (phone over Tailscale) require a Bearer token / ?token=.
+        client = self.client_address[0]
+        if client in ("127.0.0.1", "::1", "localhost"):
+            return True
+        if not self.access_token:
+            return False  # remote access disabled until a token is configured
+        auth = self.headers.get("Authorization", "")
+        q = parse_qs(urlparse(self.path).query).get("token", [""])[0]
+        return auth == f"Bearer {self.access_token}" or q == self.access_token
+
     def _send(self, obj, code=200):
+        if not self._authorized():
+            body = json.dumps({"error": "unauthorized — provide the access token"}).encode()
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         body = json.dumps(obj).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
 
     def do_GET(self):
         u = urlparse(self.path)
