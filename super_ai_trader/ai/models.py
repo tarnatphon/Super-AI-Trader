@@ -89,7 +89,17 @@ def library() -> dict:
 
 
 def active_model() -> str | None:
-    """The model the assistant will use (env override or first sensible pick)."""
+    """The model the assistant will use.
+
+    Priority: persisted config choice -> OLLAMA_MODEL env -> best installed.
+    """
+    try:
+        from ..config import get as cfg_get
+        chosen = cfg_get("ai_model")
+        if chosen:
+            return chosen
+    except Exception:
+        pass
     env = os.getenv("OLLAMA_MODEL")
     if env:
         return env

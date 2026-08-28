@@ -38,9 +38,23 @@ def _real_bars(exchange_id: str, symbol: str, timeframe: str = "1h", limit: int 
 def _ai_library() -> dict:
     from ..ai.models import library
     from ..installer import ollama_present
+    from .. import config
     d = library()
     d["ollama_installed"] = ollama_present()
+    cfg = config.load()
+    d["ai_model"] = cfg.get("ai_model")
+    d["ai_chosen"] = cfg.get("ai_chosen", False)
+    d["needs_selection"] = not cfg.get("ai_chosen", False)
     return d
+
+
+def _ai_select(payload: dict) -> dict:
+    from .. import config
+    model = payload.get("model")
+    if not model:
+        return {"ok": False, "error": "no model chosen"}
+    cfg = config.save({"ai_model": model, "ai_chosen": True})
+    return {"ok": True, "ai_model": cfg.get("ai_model"), "ai_chosen": True}
 
 
 def _ai_install(payload: dict) -> dict:
@@ -574,6 +588,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(entry)
         elif u.path == "/api/ai/library":
             self._send(_ai_library())
+        elif u.path == "/api/ai/select":
+            self._send(_ai_select(payload))
         elif u.path == "/api/ai/install":
             self._send(_ai_install(payload))
         elif u.path == "/api/restart":

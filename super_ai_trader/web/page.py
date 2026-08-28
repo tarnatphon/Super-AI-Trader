@@ -82,11 +82,29 @@ HTML = r"""<!doctype html>
     background:rgba(41,196,132,.15);border:1px solid rgba(41,196,132,.45);color:#9af0cd}
   .regime-off{display:inline-block;margin-top:10px;padding:8px 14px;border-radius:999px;font-weight:700;font-size:15px;
     background:rgba(255,193,77,.15);border:1px solid rgba(255,193,77,.45);color:#ffe2a8}
+  .modal{position:fixed;inset:0;background:rgba(4,8,14,.86);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .modal.show{display:flex}
+  .modal .box{background:var(--card);border:1px solid var(--line);border-radius:20px;max-width:560px;width:100%;padding:24px;max-height:88vh;overflow:auto}
+  .pick{padding:12px 14px;margin:8px 0;border-radius:12px;background:var(--card2);border:2px solid var(--line);cursor:pointer}
+  .pick:hover{border-color:var(--accent)} .pick.sel{border-color:var(--green)}
   @media(max-width:560px){.metrics{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class="wrap">
+<div class="modal" id="aiModal">
+  <div class="box">
+    <h2 style="margin-top:0">&#x1F9E0; Choose your local AI</h2>
+    <p class="help">First thing: pick the AI brain. It runs only on this computer (no cloud). You can
+      change it later in <b>Local AI brain</b>. No local model? Use the built-in AI.</p>
+    <div id="modal_models"><div class="fine">Checking&#8230;</div></div>
+    <div class="pick sel" data-model="">
+      <b>&#x26A1; Built-in AI (no download)</b>
+      <div class="fine">Simple rule-based understanding &#8212; works offline immediately. Pick this if unsure.</div>
+    </div>
+    <button class="btn btn-green" style="margin-top:14px" onclick="confirmAIPicker()">Continue with selected &rarr;</button>
+  </div>
+</div>
   <header>
     <div class="logo">Super <span class="ai">AI</span> Trader</div>
     <div class="tag">Buy low · Sell high · The safe way. Plain words, simple buttons.</div>
@@ -759,6 +777,7 @@ refreshPresets();
 loadMarket();
 loadHistory();
 loadAILibrary();
+showAIStartPicker();
 
 async function loadMarket(){
   const body={exchange:'binance', ticker:document.getElementById('mk_coin').value,
@@ -881,6 +900,30 @@ async function installModel(id){
   }
 }
 
+let pickedModel='';
+async function showAIStartPicker(){
+  let d; try{ d=await post('/api/ai/library',{});}catch(e){return;}
+  if(!d.needs_selection) return;
+  pickedModel='';
+  const box=document.getElementById('modal_models');
+  box.innerHTML=(d.models||[]).map(m=>{
+    const here=m.installed?' <span class="up">&#x2714; ready</span>':'';
+    return '<div class="pick" data-model="'+m.id+'"><b>'+m.name+'</b>'+here+' <span class="fine">('+m.device+', ~'+m.size_gb+'GB)</span><div class="fine">'+m.note+'</div></div>';
+  }).join('');
+  document.querySelectorAll('#aiModal .pick').forEach(el=>{
+    el.onclick=()=>{
+      document.querySelectorAll('#aiModal .pick').forEach(x=>x.classList.remove('sel'));
+      el.classList.add('sel'); pickedModel=el.getAttribute('data-model');
+    };
+  });
+  document.getElementById('aiModal').classList.add('show');
+}
+async function confirmAIPicker(){
+  await post('/api/ai/select',{model: pickedModel||''});
+  document.getElementById('aiModal').classList.remove('show');
+  loadAILibrary(); loadMarket();
+}
+</script>
 </body>
 </html>
 """
