@@ -165,6 +165,12 @@ HTML = r"""<!doctype html>
     <p class="help">Real Binance/Gate.io prices with EMA 7 / 25 / 99 (like your trading app).
       Shows practice data here if the live feed isn't connected.</p>
     <div class="row">
+      <div><label>Exchange</label>
+        <select id="mk_exchange" onchange="loadMarket()">
+          <option value="binance">Binance</option>
+          <option value="gateio">Gate.io</option>
+        </select>
+      </div>
       <div><label>Coin</label>
         <select id="mk_coin" onchange="loadMarket()">
           <option>BTC</option><option>ETH</option><option selected>BNB</option><option>SOL</option><option>DOGE</option>
@@ -915,7 +921,7 @@ showAIStartPicker();
 startupCheck();
 
 async function loadMarket(){
-  const body={exchange:'binance', ticker:document.getElementById('mk_coin').value,
+  const body={exchange:(document.getElementById('mk_exchange')?document.getElementById('mk_exchange').value:'binance'), ticker:document.getElementById('mk_coin').value,
     timeframe:document.getElementById('mk_tf').value, limit:400,
     show_grid:document.getElementById('mk_grid_on')?.checked !== false,
     range_pct: parseFloat(document.getElementById('range_pct')?.value||12),
@@ -963,7 +969,7 @@ function drawMarket(m){
 async function testConnection(){
   const box=document.getElementById('connTests');
   box.innerHTML='<div class="fine">Checking… (this may take a moment)</div>';
-  const body={exchange:'binance', ticker:document.getElementById('mk_coin').value};
+  const body={exchange:(document.getElementById('mk_exchange')?document.getElementById('mk_exchange').value:'binance'), ticker:document.getElementById('mk_coin').value};
   const r=await post('/api/connection-test', body);
   box.innerHTML=(r.checks||[]).map(c=>
     `<div style="margin:6px 0;padding:8px 12px;border-radius:10px;`+
@@ -1314,6 +1320,9 @@ async function livePreflight(){
 async function quickDemo(){
   // fill sensible demo values and start one practice grid
   document.getElementById('mg_coins').value='BNB';
+  if(document.getElementById('mg_exchange') && document.getElementById('mk_exchange')){
+    document.getElementById('mg_exchange').value=document.getElementById('mk_exchange').value;
+  }
   document.getElementById('mg_inv').value='1000';
   document.getElementById('mg_range').value='12';
   document.getElementById('mg_grids').value='25';
