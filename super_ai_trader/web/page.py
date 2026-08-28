@@ -285,6 +285,7 @@ HTML = r"""<!doctype html>
     <button class="btn btn-gray" style="margin-top:8px;border-color:#ffc14d;color:#ffe2a8"
       onclick="multiRetune()">&#x1F9E0; Auto-tune exits for all running coins</button>
     <div id="mg_tune" class="fine" style="margin-top:8px"></div>
+    <div id="mg_daily" class="fine" style="margin-top:6px"></div>
     <div id="mg_summary" class="metrics" style="margin-top:14px"></div>
     <div id="mg_rows" style="margin-top:12px"></div>
     <div id="mg_events" style="margin-top:10px"></div>
@@ -1188,6 +1189,22 @@ async function multiRetune(){
   el.innerHTML='<b>Tuned today:</b> '+rows.join(' &middot; ');
   multiSummary();
 }
+
+async function maybeDailyRetune(){
+  try{
+    const r=await post('/api/multigrid/daily-retune',{});
+    const el=document.getElementById('mg_daily');
+    if(!el) return;
+    if(r.ran){
+      const n=(r.results||[]).length;
+      el.style.color='#9af0cd';
+      el.textContent='&#x1F9E0; AI tuned itself today ✅ ('+n+' coin(s) checked).';
+      toast('AI auto-tuned '+n+' coin(s) today','green');
+    }
+  }catch(e){}
+}
+setTimeout(maybeDailyRetune, 4000);
+setInterval(maybeDailyRetune, 6*60*60*1000); // re-check daily
 </script>
 </body>
 </html>

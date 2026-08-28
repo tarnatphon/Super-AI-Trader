@@ -130,6 +130,11 @@ def _multigrid_retune(payload: dict) -> dict:
     return {"results": mgr.auto_retune(coins)}
 
 
+def _multigrid_daily_retune() -> dict:
+    from ..exchange.multibot import get_manager
+    return get_manager().maybe_daily_retune()
+
+
 def _safe_stop_then_restart() -> dict:
     """PRIORITY: fully stop the bot before any restart."""
     import time as _time
@@ -735,6 +740,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_notify_save(payload))
         elif u.path == "/api/notify/test":
             self._send(_notify_test(payload))
+        elif u.path == "/api/multigrid/daily-retune":
+            self._send(_multigrid_daily_retune())
         elif u.path == "/api/multigrid/retune":
             self._send(_multigrid_retune(payload))
         elif u.path == "/api/multigrid/stop":

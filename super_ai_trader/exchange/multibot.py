@@ -25,6 +25,7 @@ class MultiGrid:
         self.sessions: dict[str, LiveSession] = {}
         self.running = False
         self.tuning: dict[str, dict] = {}   # per-coin last tuning result
+        self.last_retune_day = None
         self._lock = threading.Lock()
 
     def start(self, coins: list[str], investment: float = 1000.0,
@@ -136,10 +137,46 @@ class MultiGrid:
         except Exception as e:  # noqa: BLE001
             return {"coin": coin, "error": str(e)}
 
-    def auto_retune(self, coins: list[str] | None = None) -> list:
-        """Tune every running coin (or the supplied list)."""
+    def auto_retune(self, coins: list[str] | None = None, force: bool = True) -> list:
+        """Tune every running coin (or the supplied list).
+
+        By default runs when forced; the scheduler calls it once per day
+        (force=False) and records each coin's new settings to the journal.
+        """
         targets = coins or list(self.sessions.keys())
-        return [self.retune_coin(c) for c in targets]
+        results = [self.retune_coin(c) for c in targets]
+        # journal the tuning so it shows in History
+        try:
+            from ..journal import record
+            for rec in results:
+                if rec.get("note"):
+                    record("tune", {
+                        "coin": rec.get("coin"),
+                        "trail_arm": rec.get("trail_arm"),
+                        "trail_giveback": rec.get("trail_giveback"),
+                        "note": rec.get("note"),
+                        "forced": bool(force),
+                    })
+        except Exception:
+            pass
+        return results
+
+    def maybe_daily_retune(self) -> dict:
+        """Run auto-tune at most once per calendar day."""
+        import datetime as _dt
+        today = _dt.date.today().isoformat()
+        if self.last_retune_day == today and self.tuning:
+            return {"ran": False, "day": today}
+        coins = list(self.sessions.keys())
+        results = self.auto_retune(coins, force=False)
+        self.last_retune_day = today
+        try:
+            from ..journal import record
+            record("event", {"label": f"daily auto-tune ({len(results)} coin(s))",
+                             "coins": coins})
+        except Exception:
+            pass
+        return {"ran": True, "day": today, "results": results}
 
     def summary(self) -> dict:
         ov = self.overview()
@@ -167,6 +204,7 @@ class MultiGrid:
             "running": ov["running"],
             "count": ov["count"],
             "tuning": [self.tuning.get(c["coin"]) for c in coins if c["coin"] in self.tuning],
+            "last_retune_day": self.last_retune_day,
             "total_pnl": total_pnl,
             "total_pnl_pct": round(total_pnl / total_inv * 100, 2) if total_inv else 0.0,
             "total_round_trips": total_rt,
