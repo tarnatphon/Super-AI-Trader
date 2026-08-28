@@ -8,6 +8,9 @@ pytest>=8.0.0           # running tests
 
 pywebview>=5.0          # OPTIONAL: opens the app in its own native window (not a browser tab).
                         #   pip3 install pywebview  (the launcher falls back to browser if absent)
+pystray>=0.19           # OPTIONAL: menu-bar / system-tray icon ("bot running", open, quit).
+pillow>=10.0            # OPTIONAL: draws the tray icon (with pystray).
+                        #   pip3 install pystray pillow  (app works fine without the tray)
 
 # Local AI (no cloud): install Ollama from https://ollama.com and run `ollama pull llama3.1`
 # then `talk`/`paper` will use your local model automatically.

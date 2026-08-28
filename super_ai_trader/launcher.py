@@ -114,6 +114,13 @@ def launch(port: int | None = None, open_window: bool = True, window: bool = Tru
     )
     print(banner)
 
+    # Menu-bar/tray icon (optional; no-op if pystray isn't installed).
+    try:
+        from .tray import run_tray
+        run_tray(url, on_quit=lambda: server.shutdown())
+    except Exception:
+        pass
+
     if open_window:
         used_native = False
         if window:

@@ -21,6 +21,18 @@ The app already runs entirely in your browser while staying **100% local**.
 Everything stays on your computer; the app binds to `127.0.0.1` (not reachable
 from the internet). Optional, for live exchange prices: `pip3 install ccxt`.
 
+## Menu-bar / tray icon (optional)
+
+Install the tray extras and a small green Super-AI-Trader icon lives in your
+menu bar / system tray while the app runs, with quick actions:
+
+```
+pip3 install pystray pillow
+```
+
+Menu: **Open dashboard · Bot: running/stopped (toggle) · Quit**. The app works
+fully without it; the launcher just skips the tray if these aren't installed.
+
 ## Optional: own app window instead of a browser tab
 
 If you want Super-AI-Trader to open in its **own window titled "Super-AI-Trader"**
