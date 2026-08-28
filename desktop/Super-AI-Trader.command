@@ -21,9 +21,17 @@ fi
 source "$VENV/bin/activate"
 
 # Optional extras for native window / tray / live exchange data.
-python -c "import ccxt" 2>/dev/null || pip install -q ccxt || true
-python -c "import webview" 2>/dev/null || pip install -q pywebview || true
-python -c "import pystray" 2>/dev/null || pip install -q pystray pillow || true
+# Install into the ACTIVE venv (which is now activated). Retry with a visible error.
+ensure() {
+  python -c "import $1" 2>/dev/null && return 0
+  echo "Installing $1 (one-time)…"
+  if ! python -m pip install "$2"; then
+    echo "WARNING: could not install $2 — that feature will be off."
+  fi
+}
+ensure ccxt ccxt
+ensure webview pywebview
+# tray is not auto-started on Mac (NSApplication main-thread crash); skip pystray install.
 
 export SAT_NATIVE=0
 export SAT_TRAY=0  # tray NSApplication is unsafe from a double-click script on Mac

@@ -31,6 +31,7 @@ def run() -> int:
         fails += 1
 
     # Optional packages
+    in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
     for pkg, label, how in (
         ("ccxt", "ccxt (live Binance/Gate data)", "import ccxt"),
         ("webview", "pywebview (native window)", "import webview"),
@@ -41,7 +42,11 @@ def run() -> int:
             __import__(pkg)
             _check(label, True, "installed")
         except Exception:
-            _check(label, False, "not installed (optional; app still runs)", critical=False)
+            hint = ("not installed — activate your venv (source .venv/bin/activate) "
+                    "and run: pip install ccxt") if pkg == "ccxt" else                     "not installed (optional; app still runs)"
+            if not in_venv and pkg == "ccxt":
+                hint += "  (you appear to be running OUTSIDE the venv)"
+            _check(label, False, hint, critical=False)
 
     # Network: can we reach an exchange and get a real price?
     try:
