@@ -282,6 +282,7 @@ HTML = r"""<!doctype html>
       <button class="btn btn-gray" style="width:auto;flex:1;min-width:160px" onclick="multiRefresh()">&#x1F504; Refresh</button>
     </div>
     <div id="mg_msg" class="fine" style="margin-top:8px"></div>
+    <div id="mg_summary" class="metrics" style="margin-top:14px"></div>
     <div id="mg_rows" style="margin-top:12px"></div>
     <div id="mg_events" style="margin-top:10px"></div>
   </div>
@@ -1088,7 +1089,7 @@ async function multiStart(){
   msg.innerHTML = r.ok ? ('&#x2705; Started '+ok+' grid(s) '+
       (bad.length?('<br>failed: '+bad.map(b=>b.coin+' ('+b.error.slice(0,40)+')').join(', ')):''))
     : ('&#x26A0;&#xFE0F; Could not start grids. Install ccxt and check internet, then Test connection.');
-  if(r.ok) multiRefresh();
+  if(r.ok){ multiRefresh(); multiSummary(); }
 }
 async function multiStop(){
   const msg=document.getElementById('mg_msg');
@@ -1114,7 +1115,7 @@ async function multiRefresh(){
     if(!_mgSeen.has(key)){ _mgSeen.add(key); toast(c.coin+': '+e.text, e.color); }
   }));
 }
-setInterval(()=>{ try{ if(document.getElementById('mg_rows')) multiRefresh(); }catch(e){} }, 6000);
+setInterval(()=>{ try{ if(document.getElementById('mg_rows')){ multiRefresh(); multiSummary(); } }catch(e){} }, 6000);
 
 async function loadNotify(){
   try{
@@ -1149,6 +1150,22 @@ async function testNotify(){
   const r=await post('/api/notify/test',notifyBody());
   if(r.sent){ el.style.color='#9af0cd'; el.textContent='&#x2705; Test sent — check your email/Telegram.'; }
   else { el.style.color='#ffc7c7'; el.textContent='Not sent yet — check the App Password/token or enable a channel.'; }
+}
+
+async function multiSummary(){
+  let r; try{ r=await apiGet('/api/multigrid/summary'); }catch(e){ return; }
+  if(!r) return;
+  const pnl=r.total_pnl||0;
+  document.getElementById('mg_summary').innerHTML = `
+    <div class="metric"><div class="k">Grids running</div><div class="v">${r.count||0}</div></div>
+    <div class="metric"><div class="k">Total P/L</div><div class="v"><span class="${pnl>=0?'up':'down'}">${pnl>=0?'+':''}${fmt(pnl)}</span> <span style="font-size:14px">(${r.total_pnl_pct||0}%)</span></div></div>
+    <div class="metric"><div class="k">Round-trips</div><div class="v">${r.total_round_trips||0}</div></div>
+    <div class="metric"><div class="k">Paused / Active</div><div class="v">${(r.paused_coins||[]).length} / ${(r.active_coins||[]).length}</div></div>`;
+  // combined event feed (most recent first)
+  const evs=(r.recent_events||[]).slice().reverse();
+  document.getElementById('mg_events').innerHTML = evs.length?
+    evs.map(e=>`<div style="padding:6px 10px;margin:4px 0;border-radius:8px;background:var(--card2);border:1px solid var(--line);font-size:14px;color:${e.color==='green'?'var(--green)':e.color==='amber'?'#ffd54a':e.color==='red'?'var(--red)':'var(--muted)'}"><b>${e.coin}</b> · ${e.text}</div>`).join('')
+    : '<div class="fine">No alerts yet.</div>';
 }
 </script>
 </body>

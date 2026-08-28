@@ -668,6 +668,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_live_status())
         elif u.path == "/api/multigrid/status":
             self._send(_multigrid_status())
+        elif u.path == "/api/multigrid/summary":
+            from ..exchange.multibot import get_manager
+            self._send(get_manager().summary())
         elif u.path == "/api/capabilities":
             self._send({"ccxt": _exchanges_ok()})
         elif u.path == "/api/startup":

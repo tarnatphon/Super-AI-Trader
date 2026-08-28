@@ -114,9 +114,44 @@ class MultiGrid:
                 continue
         return {"running": self.running, "count": len(rows), "coins": rows}
 
+    def summary(self) -> dict:
+        ov = self.overview()
+        coins = ov["coins"]
+        total_pnl = round(sum(c.get("pnl") or 0 for c in coins), 2)
+        total_inv = 0.0
+        for c in coins:
+            sess = self.sessions.get(c["coin"])
+            if sess:
+                try:
+                    total_inv += float(sess.cfg.investment)
+                except Exception:
+                    pass
+        total_rt = sum(c.get("round_trips") or 0 for c in coins)
+        total_buys = sum(c.get("buys") or 0 for c in coins)
+        total_sells = sum(c.get("sells") or 0 for c in coins)
+        paused = [c["coin"] for c in coins if c.get("paused")]
+        active = [c["coin"] for c in coins if not c.get("paused") and c.get("running")]
+        all_events = []
+        for c in coins:
+            for e in (c.get("events") or []):
+                all_events.append({"coin": c["coin"], **e})
+        all_events.sort(key=lambda e: e.get("ts", 0))
+        return {
+            "running": ov["running"],
+            "count": ov["count"],
+            "total_pnl": total_pnl,
+            "total_pnl_pct": round(total_pnl / total_inv * 100, 2) if total_inv else 0.0,
+            "total_round_trips": total_rt,
+            "total_buys": total_buys,
+            "total_sells": total_sells,
+            "paused_coins": paused,
+            "active_coins": active,
+            "recent_events": all_events[-15:],
+        }
+
+
 
 # One shared manager for the web session (paper).
-_MANAGER: MultiGrid | None = None
 
 
 def get_manager(exchange: str = "binance") -> MultiGrid:
