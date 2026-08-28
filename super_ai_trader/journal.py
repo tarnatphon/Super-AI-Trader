@@ -89,3 +89,31 @@ def record_grid(ticker: str, source: str, investment: float, roi_pct: float,
 
 def record_event(label: str, ticker: str = "", **kw):
     return record("event", {"label": label, "ticker": ticker, **kw})
+
+
+# --- clean-shutdown marker (crash / power-cut detection) -----------------
+
+def _state_path() -> str:
+    return os.path.join(_dir(), "state.json")
+
+
+def mark_clean_shutdown(clean: bool = True) -> None:
+    """Write whether the previous run stopped cleanly."""
+    with open(_state_path(), "w", encoding="utf-8") as f:
+        json.dump({"clean_shutdown": bool(clean), "ts": int(time.time())}, f)
+    try:
+        os.chmod(_state_path(), 0o600)
+    except OSError:
+        pass
+
+
+def was_clean_shutdown() -> bool:
+    """True only if the last run set a clean marker; False after a crash/power cut."""
+    p = _state_path()
+    if not os.path.exists(p):
+        return False
+    try:
+        with open(p, encoding="utf-8") as f:
+            return bool(json.load(f).get("clean_shutdown", False))
+    except Exception:
+        return False

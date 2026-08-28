@@ -17,7 +17,17 @@ from ..grid.advisor import advise, plain_language
 from ..security.vault import Vault, security_checklist, platform_security_note
 from ..ai.commands import run_command
 
-_SESSION = {"live": None}
+_SESSION = {"live": None, "replay": None}
+
+# Crash/power-cut protection: at import time, reconcile any leftover state
+# from a previous run that did not close cleanly (power cut / crash). The
+# dashboard fetches /api/startup to show the result before the bot can run.
+try:
+    from ..exchange.shutdown import reconcile_on_startup
+    _STARTUP_REPORT = reconcile_on_startup(_SESSION)
+except Exception as _e:  # noqa: BLE001
+    _STARTUP_REPORT = {"clean_shutdown": False, "leftover_orders_cancelled": 0,
+                       "note": f"startup reconcile skipped: {_e}"}
 
 
 def _exchanges_ok() -> bool:
@@ -581,6 +591,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_live_status())
         elif u.path == "/api/capabilities":
             self._send({"ccxt": _exchanges_ok()})
+        elif u.path == "/api/startup":
+            self._send(_STARTUP_REPORT or {"clean_shutdown": True,
+                                           "note": "no previous session",
+                                           "leftover_orders_cancelled": 0})
         elif u.path == "/api/preset/list":
             self._send(_preset_list())
         elif u.path == "/api/preset/load":
@@ -598,7 +612,13 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length) or b"{}")
         except Exception:
             payload = {}
-        if u.path == "/api/market":
+        if u.path == "/api/startup/ack":
+            self._send({"ok": True, "acknowledged": True})
+        elif u.path == "/api/startup":
+            self._send(_STARTUP_REPORT or {"clean_shutdown": True,
+                                           "note": "no previous session",
+                                           "leftover_orders_cancelled": 0})
+        elif u.path == "/api/market":
             self._send(_market(payload))
         elif u.path == "/api/connection-test":
             self._send(_connection_tests(payload))
@@ -618,7 +638,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_safe_stop_then_restart())
         elif u.path == "/api/safe-stop":
             from ..exchange.shutdown import stop_all
-            self._send(stop_all(_SESSION))
+            from ..journal import mark_clean_shutdown
+            report = stop_all(_SESSION)
+            if report.get("safe_to_restart"):
+                mark_clean_shutdown(True)
+            self._send(report)
         elif u.path == "/api/simulate":
             self._send(_simulate(payload))
         elif u.path == "/api/autoset":

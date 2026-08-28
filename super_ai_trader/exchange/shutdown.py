@@ -16,6 +16,60 @@ from __future__ import annotations
 import time
 
 
+def reconcile_on_startup(store: dict, log=print) -> dict:
+    """PRIORITY on startup (crash / power cut / closed without stopping).
+
+    The grid's orders live on the EXCHANGE, not in this app, so a crash may
+    leave open buy/sell orders behind. Before the bot trades freely, it must:
+      1. detect there is no clean-shutdown marker for a previous session,
+      2. cancel any leftover open orders on the exchange (paper or live),
+      3. report what was found, and only then allow a fresh session.
+
+    Paper orders here are in-memory (lost on restart anyway); real exchange
+    orders are cancelled via the connector's cancel_all.
+    """
+    report = {
+        "clean_shutdown": bool(store.get("_clean_shutdown", False)),
+        "leftover_orders_cancelled": 0,
+        "note": "",
+    }
+    # Crash / power-cut detection: check the persisted shutdown marker.
+    try:
+        from ..journal import was_clean_shutdown
+        report["clean_shutdown"] = report["clean_shutdown"] and bool(was_clean_shutdown())
+    except Exception:
+        pass
+    try:
+        for key in ("live", "replay"):
+            sess = store.get(key)
+            if sess is None:
+                continue
+            runner = getattr(sess, "runner", None)
+            conn = getattr(sess, "conn", None)
+            # cancel exchange-side orders if the connector supports it
+            if conn is not None and hasattr(conn, "cancel_all_open_orders"):
+                try:
+                    report["leftover_orders_cancelled"] += int(conn.cancel_all_open_orders(sess.cfg.symbol))
+                except Exception as e:  # noqa: BLE001
+                    report["note"] += f"{key}: cancel failed ({e}). "
+            if runner is not None:
+                report["leftover_orders_cancelled"] += len(getattr(runner, "orders", []) or [])
+        report["note"] = report["note"] or (
+            "Clean shutdown detected." if report["clean_shutdown"]
+            else "App did not close cleanly (possible power cut/crash). "
+                 "Reconciled: cancelled any leftover orders before continuing."
+        )
+    except Exception as e:  # noqa: BLE001
+        report["note"] = f"Reconcile warning: {e}"
+    # Always start in a safe, idle state.
+    store["_clean_shutdown"] = False
+    return report
+
+
+def mark_clean_shutdown(store: dict) -> None:
+    store["_clean_shutdown"] = True
+
+
 def _sessions(store: dict):
     sess = store.get("live")
     return [s for s in (sess, store.get("replay")) if s is not None]

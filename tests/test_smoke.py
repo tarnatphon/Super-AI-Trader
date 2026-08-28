@@ -579,3 +579,33 @@ def test_safe_shutdown_cancels_orders_before_restart():
     # No sessions -> still safe (nothing running).
     r2 = stop_all({"live": None, "replay": None}, timeout=1)
     assert r2["safe_to_restart"] is True
+
+def test_crash_reconcile_marker_and_cancel():
+    import os, tempfile
+    old = os.environ.get("HOME")
+    os.environ["HOME"] = tempfile.mkdtemp()
+    try:
+        from super_ai_trader.journal import mark_clean_shutdown, was_clean_shutdown
+        from super_ai_trader.exchange.shutdown import reconcile_on_startup
+        # fresh: not clean (crash/power cut scenario)
+        assert was_clean_shutdown() is False
+        store = {"live": None, "replay": None}
+        r = reconcile_on_startup(store)
+        assert r["clean_shutdown"] is False  # detected unclean
+        assert "not close cleanly" in r["note"] or "Reconciled" in r["note"]
+        # after a clean stop, marker says clean
+        mark_clean_shutdown(True)
+        assert was_clean_shutdown() is True
+    finally:
+        if old is not None:
+            os.environ["HOME"] = old
+
+
+def test_cancel_all_open_orders_paper():
+    from super_ai_trader.exchange.connector import ExchangeConnector
+    conn = ExchangeConnector("binance", paper=True, paper_usdt=1000)
+    conn.place_limit_buy("BTC/USDT", 0.1, 100)
+    conn.place_limit_sell("BTC/USDT", 0.1, 110)
+    n = conn.cancel_all_open_orders("BTC/USDT")
+    assert n == 2
+    assert conn.orders == []

@@ -109,6 +109,7 @@ HTML = r"""<!doctype html>
     <div class="logo">Super <span class="ai">AI</span> Trader</div>
     <div class="tag">Buy low · Sell high · The safe way. Plain words, simple buttons.</div>
     <div class="shield"><span class="lock">🔒</span> Safety Shield ON — your keys stay on your computer, money cannot be withdrawn</div>
+    <div id="startupNotice" style="display:none;margin-top:12px;border-radius:12px;padding:12px 16px;font-size:16px"></div>
   </header>
 
   <div class="mode">
@@ -781,6 +782,7 @@ loadMarket();
 loadHistory();
 loadAILibrary();
 showAIStartPicker();
+startupCheck();
 
 async function loadMarket(){
   const body={exchange:'binance', ticker:document.getElementById('mk_coin').value,
@@ -939,6 +941,22 @@ async function safeStopAll(){
   if(r.safe_to_restart){ n.style.color='#9af0cd'; }
   else { n.style.color='#ffc7c7'; }
   n.textContent=r.message+' (orders '+r.open_orders_before+' -> '+r.open_orders_after+')';
+}
+
+async function startupCheck(){
+  try{
+    const r=await post('/api/startup',{});
+    const el=document.getElementById('startupNotice');
+    if(r.clean_shutdown) return;
+    el.style.display='block';
+    el.style.background='rgba(255,193,77,.12)';
+    el.style.border='1px solid rgba(255,193,77,.45)';
+    el.style.color='#ffe2a8';
+    el.innerHTML='&#x26A0;&#xFE0F; <b>Last session did not close cleanly</b> (possible power cut / app closed). '+
+      'Before trading, the AI checked and cancelled any leftover orders ('+
+      (r.leftover_orders_cancelled||0)+' found). The bot stays stopped until you press start. '+(r.note||'');
+    await post('/api/startup/ack',{});
+  }catch(e){}
 }
 </script>
 </body>

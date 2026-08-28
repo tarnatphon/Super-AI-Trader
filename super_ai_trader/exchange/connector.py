@@ -105,6 +105,28 @@ class ExchangeConnector:
         if order in self.orders:
             self.orders.remove(order)
 
+    def cancel_all_open_orders(self, symbol: str) -> int:
+        """Cancel every open order for a symbol (used at startup reconcile and
+        safe-stop). Paper orders are removed in memory; live exchange orders
+        are cancelled via ccxt. Returns the count cancelled."""
+        if not self.paper and self.ex is not None:
+            try:
+                open_orders = self.ex.fetch_open_orders(symbol)
+                for o in open_orders:
+                    try:
+                        self.ex.cancel_order(o["id"], symbol)
+                    except Exception:
+                        pass
+                return len(open_orders)
+            except Exception:
+                pass
+        count = len(self.orders)
+        for o in list(self.orders):
+            if symbol is None or o.symbol == symbol:
+                if o in self.orders:
+                    self.orders.remove(o)
+        return count
+
     # ---- paper fill simulation from a live price tick -------------------- #
     def tick_paper(self, symbol: str, price: float) -> list[Order]:
         """Fill any resting paper orders crossed by `price`. Returns filled orders.
