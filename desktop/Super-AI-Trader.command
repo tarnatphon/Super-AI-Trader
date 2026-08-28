@@ -26,5 +26,6 @@ python -c "import webview" 2>/dev/null || pip install -q pywebview || true
 python -c "import pystray" 2>/dev/null || pip install -q pystray pillow || true
 
 export SAT_NATIVE=0
+export SAT_TRAY=0  # tray NSApplication is unsafe from a double-click script on Mac
 exec python start_app.py
 

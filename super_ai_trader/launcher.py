@@ -117,12 +117,18 @@ def launch(port: int | None = None, open_window: bool = True, window: bool = Tru
     )
     print(banner)
 
-    # Menu-bar/tray icon (optional; no-op if pystray isn't installed).
-    try:
-        from .tray import run_tray
-        run_tray(url, on_quit=lambda: server.shutdown())
-    except Exception:
-        pass
+    # Menu-bar/tray icon. On macOS pystray starts an NSApplication run loop,
+    # which MUST be on the main thread or the process hard-crashes
+    # ("NSUpdateCycleInitialize() is called off the main thread"). A script
+    # launched from Terminal/double-click can't safely host that, so the
+    # tray is OPT-IN only via SAT_TRAY=1, and we never auto-start it.
+    import os as _os
+    if _os.environ.get("SAT_TRAY") == "1":
+        try:
+            from .tray import run_tray
+            run_tray(url, on_quit=lambda: server.shutdown())
+        except Exception:
+            pass
 
     if open_window:
         used_native = False
