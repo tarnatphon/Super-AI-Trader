@@ -326,6 +326,10 @@ def main() -> None:
         run(host=args.host, port=args.port)
     p_w.set_defaults(func=_web)
 
+    p_d = sub.add_parser("doctor", help="self-check Python, packages, internet, Binance access")
+    p_d.set_defaults(func=lambda a: __import__("sys").exit(
+        __import__("super_ai_trader.doctor", fromlist=["run"]).run()))
+
     p_p = sub.add_parser("paper", help="paper-trade a live grid against real exchange prices (no orders sent)")
     p_p.add_argument("--exchange", choices=["binance", "gateio"], default="binance")
     p_p.add_argument("--symbol", default="BTC/USDT")

@@ -124,12 +124,15 @@ def launch(port: int | None = None, open_window: bool = True, window: bool = Tru
     if open_window:
         used_native = False
         if window:
-            open_browser = None  # don't open browser if we want a native window
-            used_native = open_native_window(url)
+            try:
+                used_native = open_native_window(url)
+            except Exception:
+                used_native = False
+        # Native window handles its own lifetime. If it isn't used, ALWAYS
+        # fall back to opening the default browser (and keep the process alive).
         if not used_native:
-            open_browser(url)
-        if not used_native:
-            # Staying browser-based: keep the process alive until Ctrl+C.
+            print("Opening your browser at:", url)
+            open_browser(url, delay=0.8)
             try:
                 while True:
                     time.sleep(3600)
