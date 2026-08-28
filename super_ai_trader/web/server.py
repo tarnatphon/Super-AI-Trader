@@ -35,6 +35,11 @@ def _real_bars(exchange_id: str, symbol: str, timeframe: str = "1h", limit: int 
     return conn.ohlcv(symbol, timeframe=timeframe, limit=limit)
 
 
+def _journal_history() -> dict:
+    from ..journal import history, stats
+    return {"stats": stats(), "history": history(100)}
+
+
 def _connection_tests(payload: dict) -> dict:
     """Run friendly health checks: ccxt, live price, order-book, key (if named)."""
     checks = []
@@ -328,12 +333,29 @@ def _replay_advance(steps: int = 1) -> dict:
     if sess is None:
         return {"ok": False, "error": "no replay — start one first"}
     info = {}
+    was_finished = sess.finished
     for _ in range(max(1, steps)):
         if sess.finished:
             break
         info = sess.step()
     st = sess.status()
     st["ok"] = True
+    # Record to the journal when a run completes (only the completion event).
+    if st.get("finished") and not was_finished:
+        try:
+            from ..journal import record_grid
+            record_grid(
+                st.get("symbol", "").split("/")[0],
+                "time-machine replay",
+                st.get("investment", 0),
+                st.get("roi_pct", 0.0),
+                (st.get("pnl", 0.0) or 0.0),
+                st.get("round_trips", 0),
+                bool(st.get("killed")),
+                extra={"roi_pct": st.get("roi_pct")},
+            )
+        except Exception:
+            pass
     return st
 
 
@@ -521,6 +543,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_market(payload))
         elif u.path == "/api/connection-test":
             self._send(_connection_tests(payload))
+        elif u.path == "/api/journal":
+            self._send(_journal_history())
+        elif u.path == "/api/journal/add":
+            from ..journal import record
+            entry = record(str(payload.get("kind", "event")), payload.get("data", {}))
+            self._send(entry)
         elif u.path == "/api/simulate":
             self._send(_simulate(payload))
         elif u.path == "/api/autoset":

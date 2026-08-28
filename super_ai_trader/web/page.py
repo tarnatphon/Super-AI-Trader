@@ -313,6 +313,21 @@ HTML = r"""<!doctype html>
     <div class="fine" id="m_note"></div>
   </div>
 
+  <!-- HISTORY -->
+  <div class="card">
+    <h2>&#x1F5C2;&#xFE0F; History</h2>
+    <p class="help">A private, on-your-computer record of runs (like "Historical Profits"). It
+      survives restarts; nothing is sent anywhere.</p>
+    <div class="metrics">
+      <div class="metric"><div class="k">Runs</div><div class="v" id="jh_runs">0</div></div>
+      <div class="metric"><div class="k">Total P/L (practice)</div><div class="v" id="jh_pnl">0</div></div>
+      <div class="metric"><div class="k">Winning runs</div><div class="v" id="jh_wins">0</div></div>
+      <div class="metric"><div class="k">Grid round-trips</div><div class="v" id="jh_rt">0</div></div>
+    </div>
+    <button class="btn btn-gray" style="margin-top:12px" onclick="loadHistory()">&#x1F504; Refresh history</button>
+    <div id="jh_list" style="margin-top:12px"></div>
+  </div>
+
   <!-- SAFETY -->
   <div class="card">
     <h2>🛡️ How we keep you safe</h2>
@@ -733,6 +748,7 @@ async function loadChecklist(){
 loadChecklist();
 refreshPresets();
 loadMarket();
+loadHistory();
 
 async function loadMarket(){
   const body={exchange:'binance', ticker:document.getElementById('mk_coin').value,
@@ -796,6 +812,29 @@ async function testConnection(){
   } else {
     box.innerHTML+='<div class="fine" style="color:#9af0cd">All checks passed — live data is working.</div>';
   }
+}
+
+async function loadHistory(){
+  const r=await post('/api/journal',{});
+  const st=r.stats||{};
+  document.getElementById('jh_runs').textContent=st.runs||0;
+  const pnl=st.total_pnl||0;
+  document.getElementById('jh_pnl').innerHTML='<span class="'+(pnl>=0?'up':'down')+'">'+(pnl>=0?'+':'')+fmt(pnl)+'</span>';
+  document.getElementById('jh_wins').textContent=st.wins||0;
+  document.getElementById('jh_rt').textContent=st.round_trips||0;
+  const rows=(r.history||[]).slice().reverse().map(e=>{
+    const d=e.data||{};
+    const when=new Date(e.ts*1000).toLocaleString();
+    let line;
+    if(e.kind==='grid'||e.kind==='replay'||e.kind==='paper'){
+      const roi=d.roi_pct!=null?(' '+d.roi_pct+'%'):'';
+      line=`${(d.ticker||'').toUpperCase()} ${e.kind} ${d.source||''} &mdash; P/L ${fmt(d.pnl||0)}${roi}, ${d.round_trips||0} round-trips`;
+    } else {
+      line=`${d.label||e.kind} ${d.ticker||''}`;
+    }
+    return `<div style="padding:7px 10px;margin:5px 0;border-radius:8px;background:var(--card2);border:1px solid var(--line)" class="fine">${when}<br>${line}</div>`;
+  }).join('');
+  document.getElementById('jh_list').innerHTML=rows||'<div class="fine">No runs recorded yet — try Time Machine or a grid.</div>';
 }
 </script>
 </body>
