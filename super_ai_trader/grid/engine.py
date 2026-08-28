@@ -221,7 +221,8 @@ class GridTrader:
         self.ex = None
         if not paper:
             import ccxt  # lazy import
-            klass = getattr(ccxt, exchange_id)
+            from ..exchange.connector import ccxt_id
+            klass = getattr(ccxt, ccxt_id(exchange_id))
             self.ex = klass({"apiKey": api_key, "secret": api_secret, "enableRateLimit": True})
 
     def fetch_price(self, symbol: str) -> float:

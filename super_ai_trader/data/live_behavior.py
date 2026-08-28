@@ -44,7 +44,8 @@ def fetch_live_behavior(exchange_id: str = "binance", symbol: str = "BNB/USDT",
     """Pull the live order book + recent trades and summarize real behavior.
     Requires ccxt and internet. Raises on failure so the caller can fall back."""
     import ccxt  # lazy
-    klass = getattr(ccxt, exchange_id)
+    from ..exchange.connector import ccxt_id
+    klass = getattr(ccxt, ccxt_id(exchange_id))
     ex = klass({"enableRateLimit": True})
     ob = ex.fetch_order_book(symbol, limit=depth)
     trades = ex.fetch_trades(symbol, limit=200)

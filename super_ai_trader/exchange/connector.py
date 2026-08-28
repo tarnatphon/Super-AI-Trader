@@ -16,6 +16,19 @@ from dataclasses import dataclass, field
 from ..data.market import Bar
 
 
+# App-friendly venue id -> ccxt exchange class name. (Gate.io's ccxt class is
+# `gate`; the app/UI uses the friendlier label "gateio".)
+_CCXT_ID = {
+    "binance": "binance",
+    "gateio": "gate",
+    "gate": "gate",
+}
+
+
+def ccxt_id(exchange_id: str) -> str:
+    return _CCXT_ID.get((exchange_id or "binance").lower(), exchange_id)
+
+
 @dataclass
 class Order:
     id: str
@@ -44,7 +57,7 @@ class ExchangeConnector:
         self._oid = 0
         if not paper and (api_key and api_secret):
             import ccxt  # lazy
-            klass = getattr(ccxt, exchange_id)
+            klass = getattr(ccxt, ccxt_id(exchange_id))
             self.ex = klass({
                 "apiKey": api_key, "secret": api_secret,
                 "enableRateLimit": True, "options": {"defaultType": "spot"},
@@ -56,7 +69,7 @@ class ExchangeConnector:
     def _pub(self):
         if self._ccxt is None:
             import ccxt
-            klass = getattr(ccxt, self.exchange_id)
+            klass = getattr(ccxt, ccxt_id(self.exchange_id))
             self._ccxt = klass({"enableRateLimit": True})
         return self._ccxt
 
