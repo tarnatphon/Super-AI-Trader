@@ -1375,6 +1375,36 @@ async function liveOrders(){
   el.innerHTML='Open orders ('+r.count+') on '+r.exchange+': '+
     (r.count? ('<div style="margin-top:4px">'+rows+'</div>') : '<span class="fine"> none for '+r.symbol+'</span>');
 }
+
+let _liveOrdersTimer=null;
+async function maybeLiveOrders(){
+  // Only auto-refresh if the user has a vault password present (likely armed).
+  const pw=document.getElementById('lg_pw').value;
+  if(!pw) return; // no key yet -> don't spam
+  try{ await liveOrdersSilent(); }catch(e){}
+}
+async function liveOrdersSilent(){
+  const r=await post('/api/live/open-orders',{
+    name:document.getElementById('lg_name').value,
+    password:document.getElementById('lg_pw').value,
+    exchange:document.getElementById('ex')?document.getElementById('ex').value:'binance',
+    coin:(document.getElementById('lg_coins').value||'BNB').split(',')[0].trim()});
+  if(!r.ok) return;
+  const el=document.getElementById('lg_orders');
+  if(!el) return;
+  const rows=(r.orders||[]).map(o=>`<div style="color:${o.side==='buy'?'var(--green)':'var(--red)'}">${o.side} ${o.amount||''} @ ${o.price||''} ${o.symbol||r.symbol}</div>`).join('');
+  el.style.color='#9af0cd';
+  el.innerHTML='Open orders ('+r.count+') on '+r.exchange+': '+
+    (r.count? ('<div style="margin-top:4px">'+rows+'</div>') : '<span class="fine"> none for '+r.symbol+'</span>');
+}
+function startLiveOrdersTimer(){
+  if(_liveOrdersTimer) return;
+  _liveOrdersTimer=setInterval(maybeLiveOrders, 15000);
+}
+// ensure the timer exists after arming
+const _origArm=liveGridArm;
+liveGridArm=async function(){ await _origArm(); startLiveOrdersTimer(); };
+
 </script>
 </body>
 </html>
