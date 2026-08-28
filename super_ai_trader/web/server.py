@@ -35,6 +35,58 @@ def _real_bars(exchange_id: str, symbol: str, timeframe: str = "1h", limit: int 
     return conn.ohlcv(symbol, timeframe=timeframe, limit=limit)
 
 
+def _connection_tests(payload: dict) -> dict:
+    """Run friendly health checks: ccxt, live price, order-book, key (if named)."""
+    checks = []
+
+    def add(name, ok, detail=""):
+        checks.append({"name": name, "ok": bool(ok), "detail": str(detail)})
+
+    add("App runs on your computer", True, "Bound to 127.0.0.1 — not on the internet")
+    if _exchanges_ok():
+        add("Exchange library (ccxt)", True, "installed and ready")
+    else:
+        add("Exchange library (ccxt)", False, "Install with: pip3 install ccxt")
+        return {"ok": False, "checks": checks}
+
+    exchange = payload.get("exchange", "binance")
+    symbol = f"{payload.get('ticker', 'BTC')}/USDT"
+    try:
+        from ..exchange.connector import ExchangeConnector
+        conn = ExchangeConnector(exchange, paper=True)
+        price = conn.price(symbol)
+        add(f"Live price from {exchange.title()}", price and price > 0,
+            f"{symbol} = {price:,.4f}")
+    except Exception as e:
+        add(f"Live price from {exchange.title()}", False, f"No internet/blocked? {type(e).__name__}: {e}")
+        return {"ok": False, "checks": checks}
+
+    try:
+        from ..data.live_behavior import fetch_live_behavior
+        beh = fetch_live_behavior(exchange, symbol)
+        add("Live buyers/sellers (order book)", True,
+            f"{beh['pressure']} · {round((beh.get('buy_ratio') or 0.5)*100)}% buy vs "
+            f"{round((beh.get('sell_ratio') or 0.5)*100)}% sell")
+    except Exception as e:
+        add("Live buyers/sellers (order book)", False, type(e).__name__)
+
+    # Optional: validate a saved trade-only key.
+    name = payload.get("name")
+    password = payload.get("password")
+    if name and password:
+        try:
+            from ..exchange.live_trading import prepare_real_trade
+            pre = prepare_real_trade(name, password, 0)
+            add("Saved trade-only key", pre.get("ok", False),
+                pre.get("note") or pre.get("error") or "")
+        except Exception as e:
+            add("Saved trade-only key", False, str(e))
+    else:
+        add("Saved trade-only key", True, "Not set — paper mode (optional, checked when you connect)")
+
+    return {"ok": all(c["ok"] for c in checks), "checks": checks}
+
+
 def _market(payload: dict) -> dict:
     """Real exchange candles + EMA 7/25/99 for the live market chart."""
     from ..data.indicators import closes, ema
@@ -467,6 +519,8 @@ class Handler(BaseHTTPRequestHandler):
             payload = {}
         if u.path == "/api/market":
             self._send(_market(payload))
+        elif u.path == "/api/connection-test":
+            self._send(_connection_tests(payload))
         elif u.path == "/api/simulate":
             self._send(_simulate(payload))
         elif u.path == "/api/autoset":

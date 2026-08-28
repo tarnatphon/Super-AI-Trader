@@ -141,6 +141,8 @@ HTML = r"""<!doctype html>
       </div>
     </div>
     <div class="fine" id="mk_src" style="margin:8px 0"></div>
+    <button class="btn btn-gray" style="margin:6px 0" onclick="testConnection()">🔌 Test connection to Binance / Gate</button>
+    <div id="connTests" style="margin:10px 0"></div>
     <div class="big" id="mk_price" style="font-size:28px">–</div>
     <svg id="marketChart" viewBox="0 0 600 220"></svg>
     <div class="fine" id="mk_pressure"></div>
@@ -777,6 +779,23 @@ function drawMarket(m){
           `<text x="${W-pad-150}" y="16" fill="#29c484" font-size="12">● buy</text>`+
           `<text x="${W-pad-80}" y="16" fill="#ff6b6b" font-size="12">● sell</text>`;
   svg.innerHTML=html;
+}
+async function testConnection(){
+  const box=document.getElementById('connTests');
+  box.innerHTML='<div class="fine">Checking… (this may take a moment)</div>';
+  const body={exchange:'binance', ticker:document.getElementById('mk_coin').value};
+  const r=await post('/api/connection-test', body);
+  box.innerHTML=(r.checks||[]).map(c=>
+    `<div style="margin:6px 0;padding:8px 12px;border-radius:10px;`+
+    `background:var(--card2);border:1px solid var(--line)">`+
+    `<b>${c.ok?'<span class="up">✔</span>':'<span class="down">✖</span>'} ${c.name}</b>`+
+    `<div class="fine">${c.detail||''}</div></div>`).join('');
+  if(!r.ok){
+    box.innerHTML+='<div class="fine" style="color:#ffc7c7">Some checks failed. Install ccxt (`pip3 install ccxt`) or check internet for live prices. '+
+      'Paper trading and practice still work without it.</div>';
+  } else {
+    box.innerHTML+='<div class="fine" style="color:#9af0cd">All checks passed — live data is working.</div>';
+  }
 }
 </script>
 </body>
