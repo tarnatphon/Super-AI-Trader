@@ -609,3 +609,36 @@ def test_cancel_all_open_orders_paper():
     n = conn.cancel_all_open_orders("BTC/USDT")
     assert n == 2
     assert conn.orders == []
+
+def test_live_grid_guard_blocked_until_armed():
+    from super_ai_trader.exchange.guard import LiveOrderGuard, LiveNotArmed
+
+    class Fake:
+        def __init__(self): self.orders = []
+        def place_limit_buy(self, s, a, p):
+            o = {"side": "buy", "amount": a, "price": p}; self.orders.append(o); return o
+        def place_limit_sell(self, s, a, p):
+            return {"side": "sell", "amount": a, "price": p}
+
+    # blocked until armed
+    g = LiveOrderGuard(Fake(), max_spend=100)
+    try:
+        g.place_limit_buy("X/USDT", 0.5, 100)
+        assert False
+    except LiveNotArmed:
+        pass
+    # wrong phrase refused
+    g2 = LiveOrderGuard(Fake(), 100)
+    try:
+        g2.arm("no"); assert False
+    except LiveNotArmed:
+        pass
+    g2.arm("I AGREE")
+    g2.place_limit_buy("X/USDT", 0.5, 100)   # 50
+    g2.place_limit_buy("X/USDT", 0.4, 100)   # 40 -> 90
+    assert round(g2.spent, 2) == 90.0
+    try:
+        g2.place_limit_buy("X/USDT", 0.3, 100)  # 30 -> 120 > cap
+        assert False
+    except LiveNotArmed:
+        pass

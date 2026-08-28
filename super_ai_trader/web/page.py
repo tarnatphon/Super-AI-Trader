@@ -379,6 +379,32 @@ HTML = r"""<!doctype html>
     <div id="ai_models"></div>
   </div>
 
+    <div style="margin-top:18px;border-top:1px dashed var(--line);padding-top:14px">
+      <h2 style="color:#ffc7c7;font-size:19px">&#x1F534; REAL-MONEY multi-coin grids</h2>
+      <p class="help">This places REAL orders using your unlocked trade-only key. Withdrawals stay OFF
+        and total buys are capped. Steps: build &rarr; review &rarr; type I AGREE &rarr; arm.</p>
+      <div class="row">
+        <div><label>Saved key name</label><input id="lg_name" value="my-binance"></div>
+        <div><label>Vault password</label><input id="lg_pw" type="password" placeholder="unlock key"></div>
+      </div>
+      <div class="row">
+        <div><label>Coins</label><input id="lg_coins" value="BNB"></div>
+        <div><label>Max spend per coin (USDT)</label><input id="lg_cap" type="number" value="50"></div>
+      </div>
+      <div class="row">
+        <div><label>Range %</label><input id="lg_range" type="number" value="12"></div>
+        <div><label>Grids</label><input id="lg_grids" type="number" value="25"></div>
+      </div>
+      <button class="btn btn-gray" style="border-color:#ffc14d;color:#ffe2a8" onclick="liveGridPrepare()">1&#xFE0F;&#x20E3; Build real grids (no orders yet)</button>
+      <div id="lg_review" class="fine"></div>
+      <label style="margin-top:8px">Type <b>I AGREE</b> to place real orders up to the cap:</label>
+      <input id="lg_agree" placeholder="I AGREE">
+      <button class="btn" style="background:#5a1f1f;color:#ffb3b3" onclick="liveGridArm()">2&#xFE0F;&#x20E3; ARM REAL GRIDS</button>
+      <button class="btn btn-gray" style="margin-top:8px" onclick="liveGridStop()">Stop &amp; cancel all real orders</button>
+      <div id="lg_status" class="fine"></div>
+    </div>
+  </div>
+
   <!-- NOTIFICATIONS -->
   <div class="card">
     <h2>&#x1F4EC; Get alerts on your phone / email</h2>
@@ -1205,6 +1231,36 @@ async function maybeDailyRetune(){
 }
 setTimeout(maybeDailyRetune, 4000);
 setInterval(maybeDailyRetune, 6*60*60*1000); // re-check daily
+
+async function liveGridPrepare(){
+  const el=document.getElementById('lg_review');
+  el.style.color='#ffe2a8'; el.textContent='Building guarded grids (read-only check)…';
+  const r=await post('/api/livegrid/prepare',{
+    name:document.getElementById('lg_name').value,
+    password:document.getElementById('lg_pw').value,
+    coins:document.getElementById('lg_coins').value,
+    range_pct:parseFloat(document.getElementById('lg_range').value||12),
+    grids:parseInt(document.getElementById('lg_grids').value||25),
+    max_spend:parseFloat(document.getElementById('lg_cap').value||50)});
+  if(!r.ok){ el.style.color='#ffc7c7'; el.textContent='&#x26A0;&#xFE0F; '+r.error; return; }
+  el.style.color='#ffe2a8';
+  el.innerHTML='&#x2713; Ready on '+r.exchange+' ('+r.key_fingerprint+'), '+r.coins_ready+' coin(s), total cap <b>'+r.total_cap+' USDT</b>. '+
+    (r.details||[]).filter(d=>d.ok).map(d=>d.coin+' @ '+d.price).join(', ')+'. <b>Review, then type I AGREE to arm.</b> '+r.note;
+}
+async function liveGridArm(){
+  const el=document.getElementById('lg_status');
+  const r=await post('/api/livegrid/arm',{confirm:document.getElementById('lg_agree').value});
+  el.style.color = r.ok ? '#9af0cd' : '#ffc7c7';
+  el.innerHTML = r.ok
+    ? ('&#x1F534; LIVE: '+r.armed_coins+' grid(s) armed — real orders placed within cap.')
+    : ('&#x26A0;&#xFE0F; '+(r.errors&&r.errors.join('; ')||r.error||'Not armed. Type I AGREE.'));
+}
+async function liveGridStop(){
+  const el=document.getElementById('lg_status');
+  const r=await post('/api/livegrid/stop',{});
+  el.style.color='#9af0cd';
+  el.textContent='&#x23F9; Stopped; real orders cancelled.';
+}
 </script>
 </body>
 </html>

@@ -135,6 +135,38 @@ def _multigrid_daily_retune() -> dict:
     return get_manager().maybe_daily_retune()
 
 
+def _live_grid_prepare(payload: dict) -> dict:
+    from ..exchange.live_multigrid import get_live_manager
+    lm = get_live_manager()
+    coins = payload.get("coins") or ["BTC"]
+    if isinstance(coins, str):
+        coins = [c.strip() for c in coins.split(",") if c.strip()]
+    return lm.prepare(
+        payload.get("name", payload.get("exchange", "binance")),
+        payload.get("password", ""),
+        coins,
+        float(payload.get("investment", 100) or 100),
+        float(payload.get("range_pct", 12)),
+        int(payload.get("grids", 25)),
+        float(payload.get("max_spend", 50) or 50),
+    )
+
+
+def _live_grid_arm(payload: dict) -> dict:
+    from ..exchange.live_multigrid import get_live_manager
+    return get_live_manager().arm(payload.get("confirm", ""))
+
+
+def _live_grid_stop() -> dict:
+    from ..exchange.live_multigrid import get_live_manager
+    return get_live_manager().stop_all()
+
+
+def _live_grid_status() -> dict:
+    from ..exchange.live_multigrid import get_live_manager
+    return get_live_manager().overview()
+
+
 def _safe_stop_then_restart() -> dict:
     """PRIORITY: fully stop the bot before any restart."""
     import time as _time
@@ -682,6 +714,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_live_status())
         elif u.path == "/api/multigrid/status":
             self._send(_multigrid_status())
+        elif u.path == "/api/livegrid/status":
+            self._send(_live_grid_status())
         elif u.path == "/api/multigrid/summary":
             from ..exchange.multibot import get_manager
             self._send(get_manager().summary())
@@ -742,6 +776,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_notify_test(payload))
         elif u.path == "/api/multigrid/daily-retune":
             self._send(_multigrid_daily_retune())
+        elif u.path == "/api/livegrid/prepare":
+            self._send(_live_grid_prepare(payload))
+        elif u.path == "/api/livegrid/arm":
+            self._send(_live_grid_arm(payload))
+        elif u.path == "/api/livegrid/stop":
+            self._send(_live_grid_stop())
         elif u.path == "/api/multigrid/retune":
             self._send(_multigrid_retune(payload))
         elif u.path == "/api/multigrid/stop":
