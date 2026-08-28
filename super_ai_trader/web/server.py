@@ -288,6 +288,57 @@ def _live_grid_status() -> dict:
     return get_live_manager().overview()
 
 
+def _emergency_stop(payload: dict) -> dict:
+    """Global kill: cancel every paper grid across all venues and, if a
+    vault password is supplied, cancel open real orders for the saved key.
+    """
+    report = {"paper": 0, "live_attempted": False, "live": None, "errors": []}
+    # 1) stop all paper multi-grid managers (binance + gateio)
+    try:
+        from ..exchange.multibot import _MANAGERS
+        for ex, mgr in _MANAGERS.items():
+            try:
+                r = mgr.stop()
+                report["paper"] += int(r.get("stopped", 0))
+            except Exception as e:
+                report["errors"].append(f"{ex}: {e}")
+    except Exception:
+        pass
+    # 2) any live paper session in _SESSION
+    try:
+        from ..exchange.shutdown import stop_all
+        rep = stop_all(_SESSION)
+        report["paper"] += rep.get("open_orders_before", 0) and 0  # don't double count
+    except Exception:
+        pass
+    # 3) real exchange orders — only if the user unlocks a key right here.
+    name = payload.get("name")
+    password = payload.get("password")
+    coins = payload.get("coins") or []
+    if isinstance(coins, str):
+        coins = [c.strip() for c in coins.split(",") if c.strip()]
+    if name and password:
+        try:
+            from ..security.vault import Vault
+            cred = Vault().load(name, password)
+            from ..exchange.connector import ExchangeConnector
+            conn = ExchangeConnector(cred["exchange"], paper=False,
+                                     api_key=cred["api_key"], api_secret=cred["api_secret"])
+            total = 0
+            for coin in (coins or []):
+                try:
+                    total += int(conn.cancel_all_open_orders(f"{coin}/USDT"))
+                except Exception as e:
+                    report["errors"].append(f"{coin}: {e}")
+            report["live_attempted"] = True
+            report["live"] = {"exchange": cred["exchange"], "cancelled": total}
+        except Exception as e:
+            report["errors"].append(str(e))
+    from ..journal import record_event
+    record_event("EMERGENCY STOP triggered", "ALL")
+    return {"ok": True, **report}
+
+
 def _safe_stop_then_restart() -> dict:
     """PRIORITY: fully stop the bot before any restart."""
     import time as _time
@@ -929,6 +980,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_multigrid_retune(payload))
         elif u.path == "/api/multigrid/stop":
             self._send(_multigrid_stop())
+        elif u.path == "/api/emergency-stop":
+            self._send(_emergency_stop(payload))
         elif u.path == "/api/safe-stop":
             from ..exchange.shutdown import stop_all
             from ..journal import mark_clean_shutdown

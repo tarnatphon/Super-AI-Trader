@@ -110,6 +110,12 @@ HTML = r"""<!doctype html>
     <div class="tag">Buy low · Sell high · The safe way. Plain words, simple buttons.</div>
     <div class="shield"><span class="lock">🔒</span> Safety Shield ON — your keys stay on your computer, money cannot be withdrawn</div>
     <div id="startupNotice" style="display:none;margin-top:12px;border-radius:12px;padding:12px 16px;font-size:16px"></div>
+    <button id="emergencyBtn" onclick="emergencyStop()"
+      style="margin-top:14px;background:linear-gradient(180deg,#ff6b6b,#c0392b);color:white;
+             border:none;border-radius:14px;padding:16px 26px;font-size:20px;font-weight:800;
+             box-shadow:0 8px 20px rgba(0,0,0,.35);cursor:pointer;width:100%;max-width:560px">
+      &#x1F6D1; EMERGENCY STOP &mdash; cancel ALL orders</button>
+    <div id="emergencyNote" class="fine" style="margin-top:8px"></div>
   </header>
 
   <div class="mode">
@@ -1405,6 +1411,21 @@ function startLiveOrdersTimer(){
 const _origArm=liveGridArm;
 liveGridArm=async function(){ await _origArm(); startLiveOrdersTimer(); };
 
+
+async function emergencyStop(){
+  if(!confirm('EMERGENCY STOP: stop every paper grid and cancel ALL orders. Proceed?')) return;
+  const btn=document.getElementById('emergencyBtn'); btn.disabled=true; btn.textContent='Stopping…';
+  const r=await post('/api/emergency-stop',{
+    name:(document.getElementById('rl_name')||{}).value?document.getElementById('rl_name').value:'',
+    password:(document.getElementById('rl_pw')||{}).value?document.getElementById('rl_pw').value:'',
+    coins:(document.getElementById('lg_coins')||{}).value?document.getElementById('lg_coins').value:''});
+  btn.disabled=false;
+  btn.innerHTML='&#x1F6D1; EMERGENCY STOP &mdash; cancel ALL orders';
+  const note=document.getElementById('emergencyNote');
+  note.style.color='#9af0cd';
+  note.textContent='✅ All paper grids stopped'+(r.live?('; cancelled '+r.live.cancelled+' real orders on '+r.live.exchange):' (real orders only if a vault password was entered).');
+  toast('EMERGENCY STOP done — all orders cancelled','red');
+}
 </script>
 </body>
 </html>
