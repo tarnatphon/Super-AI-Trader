@@ -15,5 +15,7 @@ call .venv\Scripts\activate.bat
 python -c "import ccxt" 2>nul || pip install -q ccxt
 python -c "import webview" 2>nul || pip install -q pywebview
 python -c "import pystray" 2>nul || pip install -q pystray pillow
+set SAT_NATIVE=0
 python start_app.py
+
 pause

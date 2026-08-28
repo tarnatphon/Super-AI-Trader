@@ -56,6 +56,9 @@ def open_native_window(url: str) -> bool:
         return False
     try:
         icon = _icon_path()
+        # Do NOT take over the main thread/block here if the native stack is
+        # unavailable (e.g. launched from a GUI-less double-click context).
+        # A failure must bubble up so we can fall back to the browser.
         window = webview.create_window(
             "Super-AI-Trader",
             url,
@@ -70,7 +73,7 @@ def open_native_window(url: str) -> bool:
             os._exit(0)  # closing the window stops the whole app
 
         window.events.closed += _on_closed
-        webview.start()
+        webview.start(gui=None)
         return True
     except Exception:
         return False

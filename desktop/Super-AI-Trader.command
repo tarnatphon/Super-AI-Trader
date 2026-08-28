@@ -25,4 +25,6 @@ python -c "import ccxt" 2>/dev/null || pip install -q ccxt || true
 python -c "import webview" 2>/dev/null || pip install -q pywebview || true
 python -c "import pystray" 2>/dev/null || pip install -q pystray pillow || true
 
+export SAT_NATIVE=0
 exec python start_app.py
+
