@@ -260,6 +260,32 @@ HTML = r"""<!doctype html>
     <div class="fine" id="b_info"></div>
   </div>
 
+  <!-- MULTI-COIN GRIDS -->
+  <div class="card">
+    <h2>&#x1F916; Multi-coin grids (practice money)</h2>
+    <p class="help">Start safe paper grids on several coins at once. Each one reads the real price,
+      pauses in a crash, trails winners, and shows alerts below. No real orders.</p>
+    <div class="row">
+      <div>
+        <label>Coins (comma separated)</label>
+        <input id="mg_coins" value="BNB,SOL,ETH">
+      </div>
+      <div><label>Money each (USDT)</label><input id="mg_inv" type="number" value="1000"></div>
+    </div>
+    <div class="row">
+      <div><label>Range width %</label><input id="mg_range" type="number" value="12"></div>
+      <div><label>Grid lines</label><input id="mg_grids" type="number" value="25"></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+      <button class="btn btn-green" style="width:auto;flex:1;min-width:160px" onclick="multiStart()">&#x25B6;&#xFE0F; Start grids</button>
+      <button class="btn" style="width:auto;flex:1;min-width:160px;background:#3a2030;color:#ffb3b3" onclick="multiStop()">&#x23F9;&#xFE0F; Stop all grids (safe)</button>
+      <button class="btn btn-gray" style="width:auto;flex:1;min-width:160px" onclick="multiRefresh()">&#x1F504; Refresh</button>
+    </div>
+    <div id="mg_msg" class="fine" style="margin-top:8px"></div>
+    <div id="mg_rows" style="margin-top:12px"></div>
+    <div id="mg_events" style="margin-top:10px"></div>
+  </div>
+
   <!-- LIVE TRADING PANEL -->
   <div class="card">
     <h2>📡 Live — watch the robot trade real prices</h2>
@@ -1010,6 +1036,51 @@ function renderEvents(events){
     }
   });
 }
+
+let _mgSeen=new Set();
+async function multiStart(){
+  const msg=document.getElementById('mg_msg');
+  msg.style.color='#ffe2a8'; msg.textContent='Starting paper grids (connecting to live prices)…';
+  const r=await post('/api/multigrid/start',{
+    exchange:'binance',
+    coins:document.getElementById('mg_coins').value,
+    investment:parseFloat(document.getElementById('mg_inv').value||1000),
+    range_pct:parseFloat(document.getElementById('mg_range').value||12),
+    grids:parseInt(document.getElementById('mg_grids').value||25)
+  });
+  msg.style.color = r.ok ? '#9af0cd':'#ffc7c7';
+  const ok=(r.started||[]).filter(x=>x.ok).length;
+  const bad=(r.started||[]).filter(x=>!x.ok);
+  msg.innerHTML = r.ok ? ('&#x2705; Started '+ok+' grid(s) '+
+      (bad.length?('<br>failed: '+bad.map(b=>b.coin+' ('+b.error.slice(0,40)+')').join(', ')):''))
+    : ('&#x26A0;&#xFE0F; Could not start grids. Install ccxt and check internet, then Test connection.');
+  if(r.ok) multiRefresh();
+}
+async function multiStop(){
+  const msg=document.getElementById('mg_msg');
+  msg.style.color='#ffe2a8'; msg.textContent='Safely cancelling all grid orders…';
+  const r=await post('/api/multigrid/stop',{});
+  msg.style.color='#9af0cd'; msg.textContent='&#x23F9; Stopped '+r.stopped+' grid(s), all orders cancelled.';
+  multiRefresh();
+}
+async function multiRefresh(){
+  let r; try{ r=await apiGet('/api/multigrid/status'); }catch(e){ return; }
+  if(!r||r.count==null) return;
+  document.getElementById('mg_rows').innerHTML = (r.coins||[]).map(c=>{
+    const roi=c.roi_pct||0;
+    const reg = c.paused ? '<span style="color:#ffd54a">&#x23F8; paused</span>' : '<span class="up">&#x2705; on</span>';
+    return `<div style="padding:10px 12px;margin:6px 0;border-radius:10px;background:var(--card2);border:1px solid var(--line)">
+      <b>${c.coin}</b> &nbsp; price ${c.price} &nbsp; P/L <span class="${roi>=0?'up':'down'}">${roi>=0?'+':''}${roi}%</span>
+      &nbsp; buys ${c.buys||0} / sells ${c.sells||0} &nbsp; ${reg}
+      <div class="fine">${(c.events||[]).slice(-2).map(e=>e.text).join(' · ')}</div></div>`;
+  }).join('') || '<div class="fine">No grids running. Press Start.</div>';
+  // global alert toasts
+  (r.coins||[]).forEach(c=>(c.events||[]).forEach(e=>{
+    const key=c.coin+'|'+e.ts+'|'+e.text;
+    if(!_mgSeen.has(key)){ _mgSeen.add(key); toast(c.coin+': '+e.text, e.color); }
+  }));
+}
+setInterval(()=>{ try{ if(document.getElementById('mg_rows')) multiRefresh(); }catch(e){} }, 6000);
 </script>
 </body>
 </html>

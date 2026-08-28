@@ -82,6 +82,30 @@ def _ai_install(payload: dict) -> dict:
     return do_setup(action, target, auto_restart=bool(payload.get("restart", False)))
 
 
+def _multigrid_start(payload: dict) -> dict:
+    from ..exchange.multibot import get_manager
+    coins = payload.get("coins") or ["BNB", "SOL", "ETH"]
+    if isinstance(coins, str):
+        coins = [c.strip() for c in coins.split(",") if c.strip()]
+    mgr = get_manager(payload.get("exchange", "binance"))
+    return mgr.start(
+        coins,
+        investment=float(payload.get("investment", 1000)),
+        range_pct=float(payload.get("range_pct", 12)),
+        grids=int(payload.get("grids", 25)),
+    )
+
+
+def _multigrid_status() -> dict:
+    from ..exchange.multibot import get_manager
+    return get_manager().overview()
+
+
+def _multigrid_stop() -> dict:
+    from ..exchange.multibot import get_manager
+    return get_manager().stop()
+
+
 def _safe_stop_then_restart() -> dict:
     """PRIORITY: fully stop the bot before any restart."""
     import time as _time
@@ -627,6 +651,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_list_connections())
         elif u.path == "/api/live/status":
             self._send(_live_status())
+        elif u.path == "/api/multigrid/status":
+            self._send(_multigrid_status())
         elif u.path == "/api/capabilities":
             self._send({"ccxt": _exchanges_ok()})
         elif u.path == "/api/startup":
@@ -674,6 +700,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_ai_install(payload))
         elif u.path == "/api/restart":
             self._send(_safe_stop_then_restart())
+        elif u.path == "/api/multigrid/start":
+            self._send(_multigrid_start(payload))
+        elif u.path == "/api/multigrid/stop":
+            self._send(_multigrid_stop())
         elif u.path == "/api/safe-stop":
             from ..exchange.shutdown import stop_all
             from ..journal import mark_clean_shutdown
