@@ -141,6 +141,19 @@ HTML = r"""<!doctype html>
     <div id="chat" style="margin-top:14px"></div>
   </div>
 
+  <!-- QUICK START -->
+  <div class="card">
+    <h2>&#x1F680; Quick start (5 steps)</h2>
+    <ol style="margin:6px 0;padding-left:22px;line-height:1.7">
+      <li><b>Test connection</b> (&#x1F50C; on the Live Market card) &mdash; checks live data works.</li>
+      <li><b>Practice:</b> in <b>Multi-coin grids</b>, press <b>Start grids</b> (practice money) and watch BNB/SOL/ETH.</li>
+      <li><b>Watch the shields</b> &mdash; Grid &#x23F8; pauses in a crash; smart exit &#x1F512; locks profit; alerts pop up.</li>
+      <li><b>Time Machine</b> replays real history so you can learn safely.</li>
+      <li><b>Going real (later):</b> save a trade-only key (withdrawals OFF), run the <b>&#x2705; safety checklist</b>, use a tiny cap, then ARM.</li>
+    </ol>
+    <div class="fine">Tip: keep it in <b>paper/practice</b> until you&#39;ve seen many rounds. Alerts can go to your phone/email in <b>Get alerts</b>.</div>
+  </div>
+
   <!-- LIVE MARKET CHART -->
   <div class="card">
     <h2>📈 Live market</h2>
