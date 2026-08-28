@@ -465,6 +465,44 @@ def _autotune(payload: dict) -> dict:
     }
 
 
+def _real_cancel_all(payload: dict) -> dict:
+    """Connect with the unlocked trade-only key and cancel ALL open orders
+    on the exchange (post-crash cleanup / pre-start safety). Non-destructive:
+    removes resting limit orders; does not sell held balance."""
+    from ..security.vault import Vault
+    name = payload.get("name", "binance")
+    password = payload.get("password", "")
+    symbol = payload.get("symbol")  # optional specific symbol
+    try:
+        cred = Vault().load(name, password)
+    except FileNotFoundError:
+        return {"ok": False, "error": "No saved key for that name."}
+    except ValueError:
+        return {"ok": False, "error": "Wrong vault password."}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": str(e)}
+
+    from ..exchange.connector import ExchangeConnector
+    try:
+        conn = ExchangeConnector(cred["exchange"], paper=False,
+                                 api_key=cred["api_key"], api_secret=cred["api_secret"])
+        symbols = [symbol] if symbol else [f"{p.get('ticker','BTC')}/USDT"]
+        total = 0
+        per = {}
+        for sym in symbols:
+            try:
+                n = conn.cancel_all_open_orders(sym)
+                per[sym] = n
+                total += int(n)
+            except Exception as e:  # noqa: BLE001
+                per[sym] = f"error: {type(e).__name__}"
+        return {"ok": True, "exchange": cred["exchange"], "cancelled": total,
+                "by_symbol": per,
+                "message": f"Cancelled {total} open order(s) on {cred['exchange']}. The exchange is now clear."}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": f"Could not connect/cancel: {e}"}
+
+
 def _real_prepare(payload: dict) -> dict:
     from ..exchange.live_trading import prepare_real_trade
     return prepare_real_trade(
@@ -665,6 +703,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_real_prepare(payload))
         elif u.path == "/api/real/arm":
             self._send(_real_arm(payload))
+        elif u.path == "/api/real/cancel-all":
+            self._send(_real_cancel_all(payload))
         elif u.path == "/api/autotune":
             self._send(_autotune(payload))
         elif u.path == "/api/preset/save":

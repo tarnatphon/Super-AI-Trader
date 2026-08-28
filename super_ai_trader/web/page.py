@@ -400,6 +400,10 @@ HTML = r"""<!doctype html>
       <input id="rl_agree" placeholder="I AGREE">
       <button class="btn" style="background:#5a1f1f;color:#ffb3b3" onclick="realArm()">2️⃣ ARM REAL TRADING</button>
       <div id="rl_result" class="fine"></div>
+      <button class="btn btn-gray" style="border-color:#ffc14d;color:#ffe2a8;margin-top:14px"
+        onclick="realCancelAll()">🧹 Cancel ALL my orders on the exchange (after power cut / before starting)</button>
+      <div id="rl_cancel" class="fine"></div>
+      <div class="fine">Cancelling resting orders removes stray buys/sells left behind — it never sells the coins you already hold.</div>
     </div>
   </div>
 
@@ -957,6 +961,16 @@ async function startupCheck(){
       (r.leftover_orders_cancelled||0)+' found). The bot stays stopped until you press start. '+(r.note||'');
     await post('/api/startup/ack',{});
   }catch(e){}
+}
+
+async function realCancelAll(){
+  const el=document.getElementById('rl_cancel');
+  el.style.color='#ffe2a8'; el.textContent='Connecting and cancelling open orders on the exchange…';
+  const r=await post('/api/real/cancel-all',{name:document.getElementById('rl_name').value,
+    password:document.getElementById('rl_pw').value,
+    symbol:document.getElementById('ex').value==='gateio'?(document.getElementById('cname').value):null});
+  el.style.color = r.ok?'#9af0cd':'#ffc7c7';
+  el.textContent = r.ok ? ('&#x2705; '+r.message) : ('&#x26A0;&#xFE0F; '+r.error);
 }
 </script>
 </body>
