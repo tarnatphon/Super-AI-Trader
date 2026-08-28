@@ -485,8 +485,13 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def make_server(host: str = "127.0.0.1", port: int = 8787):
+    """Create (but don't start) the local HTTP server."""
+    return ThreadingHTTPServer((host, port), Handler)
+
+
 def run(host: str = "127.0.0.1", port: int = 8787):
-    server = ThreadingHTTPServer((host, port), Handler)
+    server = make_server(host, port)
     print(f"Super-AI-Trader dashboard: http://{host}:{port}")
     print("(local only — not reachable from the internet). Press Ctrl+C to stop.")
     try:

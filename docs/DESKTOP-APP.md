@@ -21,6 +21,19 @@ The app already runs entirely in your browser while staying **100% local**.
 Everything stays on your computer; the app binds to `127.0.0.1` (not reachable
 from the internet). Optional, for live exchange prices: `pip3 install ccxt`.
 
+## Optional: own app window instead of a browser tab
+
+If you want Super-AI-Trader to open in its **own window titled "Super-AI-Trader"**
+(like a normal app, not a browser tab), install one optional package:
+
+```
+pip3 install pywebview       # Windows/macOS/Linux
+```
+
+Then the double-click launcher automatically opens the native window and stops
+the app when you close it. If pywebview isn't installed, the launcher still
+works — it just opens in your default browser.
+
 ## Option B — True standalone app (.app / .exe) with PyInstaller
 
 Builds a normal double-click application with its own bundled Python, so end

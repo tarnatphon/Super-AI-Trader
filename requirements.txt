@@ -6,5 +6,8 @@ openai>=1.30.0          # optional cloud LLM agents (default AI is fully LOCAL v
 ccxt>=4.4.0             # live/paper trading on 100+ exchanges: paper/talk commands
 pytest>=8.0.0           # running tests
 
+pywebview>=5.0          # OPTIONAL: opens the app in its own native window (not a browser tab).
+                        #   pip3 install pywebview  (the launcher falls back to browser if absent)
+
 # Local AI (no cloud): install Ollama from https://ollama.com and run `ollama pull llama3.1`
 # then `talk`/`paper` will use your local model automatically.
