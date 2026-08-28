@@ -196,3 +196,23 @@ class ExchangeConnector:
             if tot > 0 or fr > 0 or asset == "USDT":
                 out[asset] = {"total": round(tot, 6), "free": round(fr, 6)}
         return out
+
+    def fetch_open_orders(self, symbol: str | None = None) -> list[dict]:
+        """Read-only: resting orders on the exchange (live) or in the paper
+        book. Never places or cancels anything on its own."""
+        if self.paper:
+            return [{"id": o.id, "side": o.side, "symbol": o.symbol,
+                     "amount": o.amount, "price": o.price}
+                    for o in self.orders]
+        raw = self.ex.fetch_open_orders(symbol) if symbol else self.ex.fetch_open_orders()
+        out = []
+        for o in raw:
+            out.append({
+                "id": str(o.get("id", "")),
+                "side": o.get("side"),
+                "symbol": o.get("symbol"),
+                "amount": o.get("amount"),
+                "price": o.get("price") or (o.get("info", {}) or {}).get("price"),
+                "status": o.get("status"),
+            })
+        return out

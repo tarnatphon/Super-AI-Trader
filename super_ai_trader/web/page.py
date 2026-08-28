@@ -433,6 +433,8 @@ HTML = r"""<!doctype html>
       </div>
       <button class="btn btn-gray" onclick="liveBalances()" style="border-color:#4aa3ff;color:#cfe6ff">&#x1F4B3; Check my exchange balance (read-only)</button>
       <div id="lg_bal" class="fine"></div>
+      <button class="btn btn-gray" onclick="liveOrders()" style="border-color:#4aa3ff;color:#cfe6ff">&#x1F4CB; View open orders on exchange (read-only)</button>
+      <div id="lg_orders" class="fine"></div>
       <button class="btn btn-gray" style="border-color:#ffc14d;color:#ffe2a8" onclick="liveGridPrepare()">1&#xFE0F;&#x20E3; Build real grids (no orders yet)</button>
       <div id="lg_review" class="fine"></div>
       <label style="margin-top:8px">Type <b>I AGREE</b> to place real orders up to the cap:</label>
@@ -1350,6 +1352,21 @@ async function liveBalances(){
   const rows=Object.entries(r.balances||{}).filter(([k])=>!k.startsWith('_'))
     .map(([k,v])=>k+': '+(v.free!=null?('free '+v.free):('total '+(v.total||0)))).join(' &middot; ');
   el.innerHTML='&#x2713; Available on '+r.exchange+': '+rows;
+}
+
+async function liveOrders(){
+  const el=document.getElementById('lg_orders');
+  el.style.color='#ffe2a8'; el.textContent='Reading resting orders…';
+  const r=await post('/api/live/open-orders',{
+    name:document.getElementById('lg_name').value,
+    password:document.getElementById('lg_pw').value,
+    exchange:document.getElementById('ex')?document.getElementById('ex').value:'binance',
+    coin:(document.getElementById('lg_coins').value||'BNB').split(',')[0].trim()});
+  if(!r.ok){ el.style.color='#ffc7c7'; el.textContent='&#x26A0;&#xFE0F; '+r.error; return; }
+  const rows=(r.orders||[]).map(o=>`<div style="color:${o.side==='buy'?'var(--green)':'var(--red)'}">${o.side} ${o.amount||''} @ ${o.price||''} ${o.symbol||r.symbol}</div>`).join('');
+  el.style.color='#9af0cd';
+  el.innerHTML='Open orders ('+r.count+') on '+r.exchange+': '+
+    (r.count? ('<div style="margin-top:4px">'+rows+'</div>') : '<span class="fine"> none for '+r.symbol+'</span>');
 }
 </script>
 </body>
