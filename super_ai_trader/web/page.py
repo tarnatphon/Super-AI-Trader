@@ -313,6 +313,15 @@ HTML = r"""<!doctype html>
     <div class="fine" id="m_note"></div>
   </div>
 
+  <!-- LOCAL AI LIBRARY -->
+  <div class="card">
+    <h2>&#x1F9E0; Local AI brain</h2>
+    <p class="help">The AI runs entirely on THIS computer &mdash; no cloud. Pick a small model.
+      Need Ollama? Get it free at <span style="color:var(--accent)">https://ollama.com</span> then restart the app.</p>
+    <div class="fine" id="ai_status" style="margin:6px 0">Checking local AI…</div>
+    <div id="ai_models"></div>
+  </div>
+
   <!-- HISTORY -->
   <div class="card">
     <h2>&#x1F5C2;&#xFE0F; History</h2>
@@ -749,6 +758,7 @@ loadChecklist();
 refreshPresets();
 loadMarket();
 loadHistory();
+loadAILibrary();
 
 async function loadMarket(){
   const body={exchange:'binance', ticker:document.getElementById('mk_coin').value,
@@ -836,7 +846,41 @@ async function loadHistory(){
   }).join('');
   document.getElementById('jh_list').innerHTML=rows||'<div class="fine">No runs recorded yet — try Time Machine or a grid.</div>';
 }
-</script>
+
+async function loadAILibrary(){
+  let d;
+  try { d=await post('/api/ai/library',{}); } catch(e){ return; }
+  const st=document.getElementById('ai_status');
+  if(!d.ollama_installed){
+    st.innerHTML='<span class="flat">No Ollama yet &mdash; install from ollama.com and restart to add a local brain. The app still works with its built-in simple parser.</span>';
+  } else if(!d.ollama_running){
+    st.innerHTML='<span class="flat">Ollama installed but not running &mdash; start Ollama, then install a model below.</span>';
+  } else {
+    st.innerHTML='<span class="up">&#x2714; Local AI running.</span> Active model: '+(d.active||'none yet');
+  }
+  document.getElementById('ai_models').innerHTML=(d.models||[]).map(m=>{
+    const tag=m.installed?'<span class="up">&#x2714; installed</span>':('<span class="flat">not installed</span>');
+    const btn=m.installed? '' :
+      `<button class="chip" style="border-color:#ffc14d;color:#ffe2a8" onclick="installModel('${m.id}')">Download &amp; restart</button>`;
+    return `<div style="padding:10px 12px;margin:6px 0;border-radius:10px;background:var(--card2);border:1px solid var(--line)">
+      <b>${m.name}</b> <span class="fine">(${m.device}, ~${m.size_gb}GB) ${tag}</b><br>
+      <span class="fine">${m.note}</span> ${btn}</div>`;
+  }).join('');
+}
+async function installModel(id){
+  const box=document.getElementById('ai_status');
+  box.style.color='#ffe2a8';
+  box.textContent='Downloading '+id+' from Ollama… this can take a few minutes. The app will restart when it finishes.';
+  const r=await post('/api/ai/install',{action:'pull_model',target:id,restart:true});
+  if(r.ok){
+    box.textContent='&#x2714; '+id+' ready — restarting…';
+    setTimeout(()=>fetch(_auth('/api/restart'),{method:'POST'}).catch(()=>{}), 1500);
+    setTimeout(()=>location.reload(), 6000);
+  } else {
+    box.style.color='#ffc7c7'; box.textContent=r.status||'Install failed.';
+  }
+}
+
 </body>
 </html>
 """

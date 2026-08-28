@@ -35,6 +35,29 @@ def _real_bars(exchange_id: str, symbol: str, timeframe: str = "1h", limit: int 
     return conn.ohlcv(symbol, timeframe=timeframe, limit=limit)
 
 
+def _ai_library() -> dict:
+    from ..ai.models import library
+    from ..installer import ollama_present
+    d = library()
+    d["ollama_installed"] = ollama_present()
+    return d
+
+
+def _ai_install(payload: dict) -> dict:
+    from ..installer import do_setup, pip_present
+    action = payload.get("action", "")  # "pip" or "pull_model"
+    target = payload.get("target", "")
+    if action == "pull_model" and not _ai_library().get("ollama_running"):
+        # Try to install the ccxt-ish extras? Ollama itself must be installed
+        # by the user (an app). Give clear guidance.
+        return {"ok": False,
+                "status": ("Ollama isn't running. Install it from https://ollama.com, "
+                           "start it, then come back and install the model.")}
+    if action == "pip" and not pip_present():
+        return {"ok": False, "status": "pip not found; use Python 3 with pip."}
+    return do_setup(action, target, auto_restart=bool(payload.get("restart", False)))
+
+
 def _journal_history() -> dict:
     from ..journal import history, stats
     return {"stats": stats(), "history": history(100)}
@@ -549,6 +572,17 @@ class Handler(BaseHTTPRequestHandler):
             from ..journal import record
             entry = record(str(payload.get("kind", "event")), payload.get("data", {}))
             self._send(entry)
+        elif u.path == "/api/ai/library":
+            self._send(_ai_library())
+        elif u.path == "/api/ai/install":
+            self._send(_ai_install(payload))
+        elif u.path == "/api/restart":
+            self._send({"ok": True, "status": "restart requested"})
+            import threading as _th
+            def _later():
+                import os, sys
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+            _th.Thread(target=_later, daemon=True).start()
         elif u.path == "/api/simulate":
             self._send(_simulate(payload))
         elif u.path == "/api/autoset":
