@@ -72,6 +72,28 @@ def _ai_install(payload: dict) -> dict:
     return do_setup(action, target, auto_restart=bool(payload.get("restart", False)))
 
 
+def _safe_stop_then_restart() -> dict:
+    """PRIORITY: fully stop the bot before any restart."""
+    import time as _time
+    from ..exchange.shutdown import stop_all
+    import threading as _th, os as _os, sys as _sys
+    report = stop_all(_SESSION)
+    # give the loop up to ~5s to actually stop
+    deadline = _time.time() + 5
+    while any(getattr(s, "running", False) for s in [_SESSION.get("live"), _SESSION.get("replay")] if s) and _time.time() < deadline:
+        _time.sleep(0.2)
+    _SESSION["live"] = None
+    _SESSION["replay"] = None
+    if not report["safe_to_restart"]:
+        return {"ok": False, "message": report["message"], "report": report}
+
+    def _restart():
+        _time.sleep(1.0)
+        _os.execv(_sys.executable, [_sys.executable] + _sys.argv)
+    _th.Thread(target=_restart, daemon=True).start()
+    return {"ok": True, "message": report["message"] + " Restarting now.", "report": report}
+
+
 def _journal_history() -> dict:
     from ..journal import history, stats
     return {"stats": stats(), "history": history(100)}
@@ -593,12 +615,10 @@ class Handler(BaseHTTPRequestHandler):
         elif u.path == "/api/ai/install":
             self._send(_ai_install(payload))
         elif u.path == "/api/restart":
-            self._send({"ok": True, "status": "restart requested"})
-            import threading as _th
-            def _later():
-                import os, sys
-                os.execv(sys.executable, [sys.executable] + sys.argv)
-            _th.Thread(target=_later, daemon=True).start()
+            self._send(_safe_stop_then_restart())
+        elif u.path == "/api/safe-stop":
+            from ..exchange.shutdown import stop_all
+            self._send(stop_all(_SESSION))
         elif u.path == "/api/simulate":
             self._send(_simulate(payload))
         elif u.path == "/api/autoset":

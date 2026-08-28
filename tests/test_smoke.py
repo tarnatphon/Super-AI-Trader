@@ -553,3 +553,29 @@ if __name__ == "__main__":
             fn()
             print(f"PASS {name}")
     print("\nAll smoke tests passed.")
+
+def test_safe_shutdown_cancels_orders_before_restart():
+    from super_ai_trader.exchange.shutdown import stop_all
+
+    class FakeRunner:
+        def __init__(self): self.orders = ["b1", "s1", "b2"]
+        def shutdown(self): self.orders.clear()
+
+    class FakeSess:
+        def __init__(self):
+            self.cfg = type("C", (), {"symbol": "X/USDT"})()
+            self.runner = FakeRunner(); self.running = True; self.stopped = False
+        def stop(self):
+            self.running = False; self.stopped = True
+            self.runner.shutdown()
+
+    store = {"live": FakeSess(), "replay": None}
+    r = stop_all(store, timeout=3)
+    assert r["open_orders_before"] == 3
+    assert r["open_orders_after"] == 0
+    assert r["safe_to_restart"] is True
+    assert store["live"].stopped is True
+
+    # No sessions -> still safe (nothing running).
+    r2 = stop_all({"live": None, "replay": None}, timeout=1)
+    assert r2["safe_to_restart"] is True

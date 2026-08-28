@@ -299,6 +299,9 @@ HTML = r"""<!doctype html>
       </div>
     </div>
     <button class="btn" style="background:#3a2030;color:#ffb3b3;margin-top:10px;display:none" id="stopBtn" onclick="liveStop()">⏹️ STOP the robot</button>
+    <button class="btn" style="background:#2b3a52;color:#cfe0ff;margin-top:10px"
+      onclick="safeStopAll()">&#x1F6D1; SAFE STOP — cancel all orders before leaving/restarting</button>
+    <div id="safeStopNote" class="fine"></div>
     <div id="liveStatus" class="fine"></div>
     <div id="regimeBadge" class="regime-on" style="display:none"></div>
     <div id="liveBox" style="display:none">
@@ -892,9 +895,14 @@ async function installModel(id){
   box.textContent='Downloading '+id+' from Ollama… this can take a few minutes. The app will restart when it finishes.';
   const r=await post('/api/ai/install',{action:'pull_model',target:id,restart:true});
   if(r.ok){
-    box.textContent='&#x2714; '+id+' ready — restarting…';
-    setTimeout(()=>fetch(_auth('/api/restart'),{method:'POST'}).catch(()=>{}), 1500);
-    setTimeout(()=>location.reload(), 6000);
+    box.textContent='&#x2714; '+id+' ready — safely stopping the bot before restart…';
+    setTimeout(async ()=>{
+      try{
+        const r=await (await fetch(_auth('/api/restart'),{method:'POST'})).json();
+        if(r.ok){ box.textContent='&#x2705; '+r.message; setTimeout(()=>location.reload(),4000); }
+        else { box.style.color='#ffc7c7'; box.textContent='&#x26A0;&#xFE0F; '+r.message; }
+      }catch(e){ box.style.color='#ffc7c7'; box.textContent='Could not restart safely; please use Safe Stop then restart.'; }
+    }, 1500);
   } else {
     box.style.color='#ffc7c7'; box.textContent=r.status||'Install failed.';
   }
@@ -922,6 +930,15 @@ async function confirmAIPicker(){
   await post('/api/ai/select',{model: pickedModel||''});
   document.getElementById('aiModal').classList.remove('show');
   loadAILibrary(); loadMarket();
+}
+
+async function safeStopAll(){
+  const n=document.getElementById('safeStopNote');
+  n.style.color='#ffe2a8'; n.textContent='Stopping the bot and cancelling every open order…';
+  const r=await (await fetch(_auth('/api/safe-stop'),{method:'POST'})).json();
+  if(r.safe_to_restart){ n.style.color='#9af0cd'; }
+  else { n.style.color='#ffc7c7'; }
+  n.textContent=r.message+' (orders '+r.open_orders_before+' -> '+r.open_orders_after+')';
 }
 </script>
 </body>
