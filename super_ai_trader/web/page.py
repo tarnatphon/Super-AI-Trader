@@ -431,6 +431,8 @@ HTML = r"""<!doctype html>
         <div><label>Range %</label><input id="lg_range" type="number" value="12"></div>
         <div><label>Grids</label><input id="lg_grids" type="number" value="25"></div>
       </div>
+      <button class="btn btn-gray" onclick="liveBalances()" style="border-color:#4aa3ff;color:#cfe6ff">&#x1F4B3; Check my exchange balance (read-only)</button>
+      <div id="lg_bal" class="fine"></div>
       <button class="btn btn-gray" style="border-color:#ffc14d;color:#ffe2a8" onclick="liveGridPrepare()">1&#xFE0F;&#x20E3; Build real grids (no orders yet)</button>
       <div id="lg_review" class="fine"></div>
       <label style="margin-top:8px">Type <b>I AGREE</b> to place real orders up to the cap:</label>
@@ -1334,6 +1336,21 @@ async function quickDemo(){
 
 function mgEx(){ return document.getElementById('mg_exchange')?document.getElementById('mg_exchange').value:'binance'; }
 
+
+async function liveBalances(){
+  const el=document.getElementById('lg_bal');
+  el.style.color='#ffe2a8'; el.textContent='Reading balances (no orders placed)…';
+  const r=await post('/api/live/balances',{
+    name:document.getElementById('lg_name').value,
+    password:document.getElementById('lg_pw').value,
+    exchange:document.getElementById('ex')?document.getElementById('ex').value:'binance',
+    coins:document.getElementById('lg_coins').value});
+  if(!r.ok){ el.style.color='#ffc7c7'; el.textContent='&#x26A0;&#xFE0F; '+r.error; return; }
+  el.style.color='#9af0cd';
+  const rows=Object.entries(r.balances||{}).filter(([k])=>!k.startsWith('_'))
+    .map(([k,v])=>k+': '+(v.free!=null?('free '+v.free):('total '+(v.total||0)))).join(' &middot; ');
+  el.innerHTML='&#x2713; Available on '+r.exchange+': '+rows;
+}
 </script>
 </body>
 </html>

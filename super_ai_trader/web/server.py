@@ -135,6 +135,31 @@ def _multigrid_daily_retune(exchange: str = "binance") -> dict:
     return get_manager(exchange).maybe_daily_retune()
 
 
+def _live_balances(payload: dict) -> dict:
+    """Read-only balance check with the unlocked trade-only key. Places NO orders."""
+    from ..security.vault import Vault
+    name = payload.get("name", "binance")
+    password = payload.get("password", "")
+    coins = payload.get("coins") or ["USDT", "BNB"]
+    if isinstance(coins, str):
+        coins = [c.strip() for c in coins.split(",") if c.strip()]
+    exchange = payload.get("exchange", "binance")
+    try:
+        cred = Vault().load(name, password)
+        exchange = cred.get("exchange", exchange)
+    except Exception as e:
+        return {"ok": False, "error": f"Could not unlock key: {e}"}
+    try:
+        from ..exchange.connector import ExchangeConnector
+        conn = ExchangeConnector(cred["exchange"], paper=False,
+                                 api_key=cred["api_key"], api_secret=cred["api_secret"])
+        assets = ["USDT"] + [c for c in coins if c != "USDT"]
+        bals = conn.fetch_balances(assets)
+        return {"ok": True, "exchange": exchange, "balances": bals}
+    except Exception as e:
+        return {"ok": False, "error": f"Balance read failed: {type(e).__name__} {e}"}
+
+
 def _live_preflight(payload: dict) -> dict:
     """Readiness checks before arming REAL grids. Returns steps with ok flags."""
     from ..security.vault import Vault
@@ -834,6 +859,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_notify_test(payload))
         elif u.path == "/api/multigrid/daily-retune":
             self._send(_multigrid_daily_retune(payload.get("exchange", "binance")))
+        elif u.path == "/api/live/balances":
+            self._send(_live_balances(payload))
         elif u.path == "/api/livegrid/preflight":
             self._send(_live_preflight(payload))
         elif u.path == "/api/livegrid/prepare":

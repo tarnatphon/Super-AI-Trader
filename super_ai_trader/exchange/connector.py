@@ -179,3 +179,20 @@ class ExchangeConnector:
         usdt = float(bal.get("USDT", {}).get("free", 0) or 0)
         base = 0.0  # caller can add held base value
         return usdt + base
+
+    def fetch_balances(self, symbols=("USDT",)) -> dict:
+        """Read-only balances. Paper uses the simulated wallet. Live needs a
+        trade-only key; this never places an order."""
+        if self.paper:
+            return {"USDT": {"free": round(self.paper_usdt, 4)},
+                    "_base_held": round(self.base_held, 8)}
+        bal = self.ex.fetch_balance()
+        out = {}
+        total = bal.get("total", {}) or {}
+        free = bal.get("free", {}) or {}
+        for asset in list(symbols) + ["USDT"]:
+            tot = float(total.get(asset, 0) or 0)
+            fr = float(free.get(asset, 0) or 0)
+            if tot > 0 or fr > 0 or asset == "USDT":
+                out[asset] = {"total": round(tot, 6), "free": round(fr, 6)}
+        return out
