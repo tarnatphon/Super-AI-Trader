@@ -106,6 +106,21 @@ def _multigrid_stop() -> dict:
     return get_manager().stop()
 
 
+def _notify_get() -> dict:
+    from ..notify import load_notify
+    return load_notify()
+
+
+def _notify_save(payload: dict) -> dict:
+    from ..notify import save_notify
+    return save_notify(payload)
+
+
+def _notify_test(payload: dict) -> dict:
+    from ..notify import test_channels
+    return test_channels(payload)
+
+
 def _safe_stop_then_restart() -> dict:
     """PRIORITY: fully stop the bot before any restart."""
     import time as _time
@@ -702,6 +717,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_safe_stop_then_restart())
         elif u.path == "/api/multigrid/start":
             self._send(_multigrid_start(payload))
+        elif u.path == "/api/notify/get":
+            self._send(_notify_get())
+        elif u.path == "/api/notify/save":
+            self._send(_notify_save(payload))
+        elif u.path == "/api/notify/test":
+            self._send(_notify_test(payload))
         elif u.path == "/api/multigrid/stop":
             self._send(_multigrid_stop())
         elif u.path == "/api/safe-stop":

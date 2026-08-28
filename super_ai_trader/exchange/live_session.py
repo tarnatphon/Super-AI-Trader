@@ -120,6 +120,14 @@ class LiveSession:
             self.events.append({"ts": time.time(), "text": text,
                                  "kind": kind, "color": color})
             self.events = self.events[-30:]  # keep a short feed
+        # Out-of-app alerts for important events (email/Telegram), best-effort.
+        if kind in ("regime_off", "trail_lock", "stop"):
+            try:
+                from ..notify import notify
+                notify(f"Super-AI-Trader: {text[:60]}",
+                       f"{self.cfg.symbol}\n{text}")
+            except Exception:
+                pass
 
     def _emit_events(self, price: float, info: dict):
         """Detect meaningful changes and announce them (once per change)."""

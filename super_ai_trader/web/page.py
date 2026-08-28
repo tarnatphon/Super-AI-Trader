@@ -374,6 +374,39 @@ HTML = r"""<!doctype html>
     <div id="ai_models"></div>
   </div>
 
+  <!-- NOTIFICATIONS -->
+  <div class="card">
+    <h2>&#x1F4EC; Get alerts on your phone / email</h2>
+    <p class="help">Optional. The AI emails/Telegrams you when it <b>pauses in a crash</b> or
+      <b>locks profit</b>. Stored locally; email uses a Gmail <i>App Password</i> (not your login).</p>
+    <div class="row">
+      <div><label>&#x1F4E7; Email (Gmail)</label><input id="nt_user" placeholder="you@gmail.com"></div>
+      <div><label>App Password</label><input id="nt_pass" type="password" placeholder="16-char app password"></div>
+    </div>
+    <div class="row">
+      <div><label>Send alerts to (blank = same)</label><input id="nt_to" placeholder="you@gmail.com"></div>
+      <div>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:28px">
+          <input type="checkbox" id="nt_email_on" style="width:auto"> Enable email alerts
+        </label>
+      </div>
+    </div>
+    <div class="fine">Make a Gmail App Password: Google Account &#8594; Security &#8594; 2-Step Verification &#8594; App passwords.</div>
+    <hr style="border-color:var(--line);margin:14px 0">
+    <div class="row">
+      <div><label>Telegram bot token</label><input id="nt_tg_tok" placeholder="from @BotFather"></div>
+      <div><label>Your chat id</label><input id="nt_tg_chat" placeholder="e.g. 123456789"></div>
+    </div>
+    <label style="display:flex;gap:8px;align-items:center">
+      <input type="checkbox" id="nt_tg_on" style="width:auto"> Enable Telegram alerts
+    </label>
+    <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn btn-green" style="width:auto;flex:1;min-width:150px" onclick="saveNotify()">&#x1F4BE; Save alerts</button>
+      <button class="btn btn-gray" style="width:auto;flex:1;min-width:150px" onclick="testNotify()">&#x2709; Send test</button>
+    </div>
+    <div id="nt_result" class="fine"></div>
+  </div>
+
   <!-- HISTORY -->
   <div class="card">
     <h2>&#x1F5C2;&#xFE0F; History</h2>
@@ -816,6 +849,7 @@ refreshPresets();
 loadMarket();
 loadHistory();
 loadAILibrary();
+loadNotify();
 showAIStartPicker();
 startupCheck();
 
@@ -1081,6 +1115,41 @@ async function multiRefresh(){
   }));
 }
 setInterval(()=>{ try{ if(document.getElementById('mg_rows')) multiRefresh(); }catch(e){} }, 6000);
+
+async function loadNotify(){
+  try{
+    const n=await post('/api/notify/get',{});
+    document.getElementById('nt_user').value=n.smtp_user||'';
+    document.getElementById('nt_to').value=n.email_to||'';
+    document.getElementById('nt_email_on').checked=!!n.email_enabled;
+    document.getElementById('nt_tg_tok').value=n.tg_token||'';
+    document.getElementById('nt_tg_chat').value=n.tg_chat||'';
+    document.getElementById('nt_tg_on').checked=!!n.telegram_enabled;
+  }catch(e){}
+}
+function notifyBody(){
+  return {
+    smtp_user:document.getElementById('nt_user').value,
+    smtp_pass:document.getElementById('nt_pass').value,
+    email_to:document.getElementById('nt_to').value,
+    email_enabled:document.getElementById('nt_email_on').checked,
+    tg_token:document.getElementById('nt_tg_tok').value,
+    tg_chat:document.getElementById('nt_tg_chat').value,
+    telegram_enabled:document.getElementById('nt_tg_on').checked
+  };
+}
+async function saveNotify(){
+  const r=await post('/api/notify/save',notifyBody());
+  const el=document.getElementById('nt_result');
+  el.style.color='#9af0cd'; el.textContent='Saved (password stored encrypted/locally).';
+}
+async function testNotify(){
+  const el=document.getElementById('nt_result');
+  el.style.color='#ffe2a8'; el.textContent='Sending test alert…';
+  const r=await post('/api/notify/test',notifyBody());
+  if(r.sent){ el.style.color='#9af0cd'; el.textContent='&#x2705; Test sent — check your email/Telegram.'; }
+  else { el.style.color='#ffc7c7'; el.textContent='Not sent yet — check the App Password/token or enable a channel.'; }
+}
 </script>
 </body>
 </html>
