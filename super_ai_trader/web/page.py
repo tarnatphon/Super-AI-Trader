@@ -147,6 +147,11 @@ HTML = r"""<!doctype html>
     <ol style="margin:6px 0;padding-left:22px;line-height:1.7">
       <li><b>Test connection</b> (&#x1F50C; on the Live Market card) &mdash; checks live data works.</li>
       <li><b>Practice:</b> in <b>Multi-coin grids</b>, press <b>Start grids</b> (practice money) and watch BNB/SOL/ETH.</li>
+      <li>Or just press <b>&#x25B6; Start a quick demo</b> (one BNB practice grid):</li>
+    </ol>
+    <button class="btn btn-green" style="margin-top:4px;width:auto;padding:12px 20px"
+      onclick="quickDemo()">&#x25B6;&#xFE0F; Start a quick demo (practice BNB)</button>
+    <ol style="margin-top:8px;padding-left:22px;line-height:1.7" hidden>
       <li><b>Watch the shields</b> &mdash; Grid &#x23F8; pauses in a crash; smart exit &#x1F512; locks profit; alerts pop up.</li>
       <li><b>Time Machine</b> replays real history so you can learn safely.</li>
       <li><b>Going real (later):</b> save a trade-only key (withdrawals OFF), run the <b>&#x2705; safety checklist</b>, use a tiny cap, then ARM.</li>
@@ -1293,6 +1298,18 @@ async function livePreflight(){
     (r.ready
       ? '<div style="color:#9af0cd;font-weight:700;margin-top:6px">All checks passed — ready to Build then Arm.</div>'
       : '<div style="color:#ffd54a;font-weight:700;margin-top:6px">Finish the items above before going live.</div>');
+}
+
+async function quickDemo(){
+  // fill sensible demo values and start one practice grid
+  document.getElementById('mg_coins').value='BNB';
+  document.getElementById('mg_inv').value='1000';
+  document.getElementById('mg_range').value='12';
+  document.getElementById('mg_grids').value='25';
+  toast('Starting practice BNB grid…','green');
+  await multiStart();
+  // scroll to the multi-grid card
+  document.getElementById('mg_rows').scrollIntoView({behavior:'smooth',block:'center'});
 }
 </script>
 </body>
