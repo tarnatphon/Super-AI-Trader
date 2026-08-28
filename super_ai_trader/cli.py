@@ -263,7 +263,7 @@ def main() -> None:
 
     p_bt = sub.add_parser("backtest", parents=[common], help="run an out-of-sample backtest")
     p_bt.add_argument("--profile", choices=["steady", "aggressive", "default"], default="steady",
-                      help="steady targets consistent 2-5%/mo with tight drawdowns (default)")
+                      help="steady targets consistent 2-5%%/mo with tight drawdowns (default)")
     p_bt.add_argument("--equity", type=float, default=100_000)
     p_bt.add_argument("--long-only", action="store_true")
     p_bt.add_argument("--trades", action="store_true", help="print recent trades")
