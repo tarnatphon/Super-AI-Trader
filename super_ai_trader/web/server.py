@@ -243,7 +243,7 @@ def _live_grid_prepare(payload: dict) -> dict:
     coins = payload.get("coins") or ["BTC"]
     if isinstance(coins, str):
         coins = [c.strip() for c in coins.split(",") if c.strip()]
-    return lm.prepare(
+    result = lm.prepare(
         payload.get("name", payload.get("exchange", "binance")),
         payload.get("password", ""),
         coins,
@@ -252,6 +252,25 @@ def _live_grid_prepare(payload: dict) -> dict:
         int(payload.get("grids", 25)),
         float(payload.get("max_spend", 50) or 50),
     )
+    # Attach the AI's recommended trailing/exit settings per coin (from
+    # daily/auto tuning) so the live run uses paper-validated values.
+    try:
+        from ..journal import history
+        tunes = [e for e in history(200) if e.get("kind") == "tune"]
+        latest = {}
+        for e in tunes:
+            d = e.get("data", {})
+            c = d.get("coin")
+            if c:
+                latest[c] = d  # history is chronological; last wins
+        result["ai_tuned"] = {c: {"trail_arm": latest.get(c, {}).get("trail_arm"),
+                                   "trail_giveback": latest.get(c, {}).get("trail_giveback"),
+                                   "note": latest.get(c, {}).get("note"),
+                                   "tuned": c in latest}
+                              for c in coins}
+    except Exception:
+        result["ai_tuned"] = {}
+    return result
 
 
 def _live_grid_arm(payload: dict) -> dict:

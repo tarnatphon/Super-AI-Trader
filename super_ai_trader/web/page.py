@@ -1289,6 +1289,11 @@ async function liveGridPrepare(){
   el.style.color='#ffe2a8';
   el.innerHTML='&#x2713; Ready on '+r.exchange+' ('+r.key_fingerprint+'), '+r.coins_ready+' coin(s), total cap <b>'+r.total_cap+' USDT</b>. '+
     (r.details||[]).filter(d=>d.ok).map(d=>d.coin+' @ '+d.price).join(', ')+'. <b>Review, then type I AGREE to arm.</b> '+r.note;
+  if(r.ai_tuned){
+    const tuned=Object.entries(r.ai_tuned).filter(([c,v])=>v.tuned)
+      .map(([c,v])=>c+': '+v.note).join('; ');
+    if(tuned){ el.innerHTML+='<br><span class="up">&#x1F9E0; Using AI-tuned exits:</span> '+tuned; }
+  }
 }
 async function liveGridArm(){
   const el=document.getElementById('lg_status');
