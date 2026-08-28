@@ -281,6 +281,16 @@ HTML = r"""<!doctype html>
   <!-- MULTI-COIN GRIDS -->
   <div class="card">
     <h2>&#x1F916; Multi-coin grids (practice money)</h2>
+    <div class="row">
+      <div>
+        <label>Exchange</label>
+        <select id="mg_exchange" onchange="multiSummary()">
+          <option value="binance">Binance (lower fees, deep liquidity)</option>
+          <option value="gateio">Gate.io (more coins / fallback)</option>
+        </select>
+      </div>
+      <div></div>
+    </div>
     <p class="help">Start safe paper grids on several coins at once. Each one reads the real price,
       pauses in a crash, trails winners, and shows alerts below. No real orders.</p>
     <div class="row">
@@ -1127,7 +1137,7 @@ async function multiStart(){
   const msg=document.getElementById('mg_msg');
   msg.style.color='#ffe2a8'; msg.textContent='Starting paper grids (connecting to live prices)…';
   const r=await post('/api/multigrid/start',{
-    exchange:'binance',
+    exchange:document.getElementById('mg_exchange')?document.getElementById('mg_exchange').value:'binance',
     coins:document.getElementById('mg_coins').value,
     investment:parseFloat(document.getElementById('mg_inv').value||1000),
     range_pct:parseFloat(document.getElementById('mg_range').value||12),
@@ -1149,7 +1159,7 @@ async function multiStop(){
   multiRefresh();
 }
 async function multiRefresh(){
-  let r; try{ r=await apiGet('/api/multigrid/status'); }catch(e){ return; }
+  let r; try{ r=await apiGet('/api/multigrid/status?exchange='+mgEx()); }catch(e){ return; }
   if(!r||r.count==null) return;
   document.getElementById('mg_rows').innerHTML = (r.coins||[]).map(c=>{
     const roi=c.roi_pct||0;
@@ -1203,7 +1213,7 @@ async function testNotify(){
 }
 
 async function multiSummary(){
-  let r; try{ r=await apiGet('/api/multigrid/summary'); }catch(e){ return; }
+  let r; try{ r=await apiGet('/api/multigrid/summary?exchange='+mgEx()); }catch(e){ return; }
   if(!r) return;
   const pnl=r.total_pnl||0;
   document.getElementById('mg_summary').innerHTML = `
@@ -1227,7 +1237,8 @@ async function multiRetune(){
   const el=document.getElementById('mg_tune');
   el.style.color='#ffe2a8'; el.textContent='&#x1F9E0; Learning best exit settings for each coin… (this can take a minute)';
   const coins=document.getElementById('mg_coins').value;
-  const r=await post('/api/multigrid/retune',{coins});
+  const ex=document.getElementById('mg_exchange')?document.getElementById('mg_exchange').value:'binance';
+  const r=await post('/api/multigrid/retune',{coins, exchange:ex});
   const rows=(r.results||[]).map(x=> x.error
     ? `<span style="color:#ffc7c7">${x.coin}: ${x.error}</span>`
     : `<span class="up">&#x2713; ${x.coin}</span>: ${x.note}`);
@@ -1238,7 +1249,7 @@ async function multiRetune(){
 
 async function maybeDailyRetune(){
   try{
-    const r=await post('/api/multigrid/daily-retune',{});
+    const r=await post('/api/multigrid/daily-retune',{exchange:mgEx()});
     const el=document.getElementById('mg_daily');
     if(!el) return;
     if(r.ran){
@@ -1311,6 +1322,9 @@ async function quickDemo(){
   // scroll to the multi-grid card
   document.getElementById('mg_rows').scrollIntoView({behavior:'smooth',block:'center'});
 }
+
+function mgEx(){ return document.getElementById('mg_exchange')?document.getElementById('mg_exchange').value:'binance'; }
+
 </script>
 </body>
 </html>

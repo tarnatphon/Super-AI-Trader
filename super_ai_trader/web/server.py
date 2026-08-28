@@ -96,9 +96,9 @@ def _multigrid_start(payload: dict) -> dict:
     )
 
 
-def _multigrid_status() -> dict:
+def _multigrid_status(exchange: str = "binance") -> dict:
     from ..exchange.multibot import get_manager
-    return get_manager().overview()
+    return get_manager(exchange).overview()
 
 
 def _multigrid_stop() -> dict:
@@ -130,9 +130,9 @@ def _multigrid_retune(payload: dict) -> dict:
     return {"results": mgr.auto_retune(coins)}
 
 
-def _multigrid_daily_retune() -> dict:
+def _multigrid_daily_retune(exchange: str = "binance") -> dict:
     from ..exchange.multibot import get_manager
-    return get_manager().maybe_daily_retune()
+    return get_manager(exchange).maybe_daily_retune()
 
 
 def _live_preflight(payload: dict) -> dict:
@@ -767,12 +767,16 @@ class Handler(BaseHTTPRequestHandler):
         elif u.path == "/api/live/status":
             self._send(_live_status())
         elif u.path == "/api/multigrid/status":
-            self._send(_multigrid_status())
+            q = parse_qs(urlparse(u.path).query)
+            ex = (q.get("exchange") or ["binance"])[0]
+            self._send(_multigrid_status(ex))
         elif u.path == "/api/livegrid/status":
             self._send(_live_grid_status())
         elif u.path == "/api/multigrid/summary":
+            q = parse_qs(urlparse(u.path).query)
+            ex = (q.get("exchange") or ["binance"])[0]
             from ..exchange.multibot import get_manager
-            self._send(get_manager().summary())
+            self._send(get_manager(ex).summary())
         elif u.path == "/api/capabilities":
             self._send({"ccxt": _exchanges_ok()})
         elif u.path == "/api/startup":
@@ -829,7 +833,7 @@ class Handler(BaseHTTPRequestHandler):
         elif u.path == "/api/notify/test":
             self._send(_notify_test(payload))
         elif u.path == "/api/multigrid/daily-retune":
-            self._send(_multigrid_daily_retune())
+            self._send(_multigrid_daily_retune(payload.get("exchange", "binance")))
         elif u.path == "/api/livegrid/preflight":
             self._send(_live_preflight(payload))
         elif u.path == "/api/livegrid/prepare":

@@ -217,12 +217,11 @@ class MultiGrid:
 
 
 
-# One shared manager for the web session (paper).
-_MANAGER: "MultiGrid | None" = None
+# Paper managers, one per exchange (so switching venues rebuilds cleanly).
+_MANAGERS: dict[str, "MultiGrid"] = {}
 
 
 def get_manager(exchange: str = "binance") -> MultiGrid:
-    global _MANAGER
-    if _MANAGER is None:
-        _MANAGER = MultiGrid(exchange=exchange)
-    return _MANAGER
+    if exchange not in _MANAGERS:
+        _MANAGERS[exchange] = MultiGrid(exchange=exchange)
+    return _MANAGERS[exchange]
