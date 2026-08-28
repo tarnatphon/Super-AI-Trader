@@ -24,6 +24,7 @@ class MultiGrid:
         self.timeframe = timeframe
         self.sessions: dict[str, LiveSession] = {}
         self.running = False
+        self.tuning: dict[str, dict] = {}   # per-coin last tuning result
         self._lock = threading.Lock()
 
     def start(self, coins: list[str], investment: float = 1000.0,
@@ -114,6 +115,32 @@ class MultiGrid:
                 continue
         return {"running": self.running, "count": len(rows), "coins": rows}
 
+    def retune_coin(self, coin: str) -> dict:
+        """Re-learn the best trailing exit settings for one coin on recent
+        market data. Returns a small report; best-effort (paper only)."""
+        try:
+            from ..learning.trailing import optimize_trailing
+            opt = optimize_trailing(coin, days=700, real=False, quick=True)
+            b = opt["best"]
+            rec = {
+                "coin": coin,
+                "ts": time.time(),
+                "trail_arm": b.get("arm_pct"),
+                "trail_giveback": b.get("giveback_pct"),
+                "score": b.get("score"),
+                "note": f"arm {b.get('arm_pct')}%, give back {b.get('giveback_pct')}%",
+            }
+            with self._lock:
+                self.tuning[coin] = rec
+            return rec
+        except Exception as e:  # noqa: BLE001
+            return {"coin": coin, "error": str(e)}
+
+    def auto_retune(self, coins: list[str] | None = None) -> list:
+        """Tune every running coin (or the supplied list)."""
+        targets = coins or list(self.sessions.keys())
+        return [self.retune_coin(c) for c in targets]
+
     def summary(self) -> dict:
         ov = self.overview()
         coins = ov["coins"]
@@ -139,6 +166,7 @@ class MultiGrid:
         return {
             "running": ov["running"],
             "count": ov["count"],
+            "tuning": [self.tuning.get(c["coin"]) for c in coins if c["coin"] in self.tuning],
             "total_pnl": total_pnl,
             "total_pnl_pct": round(total_pnl / total_inv * 100, 2) if total_inv else 0.0,
             "total_round_trips": total_rt,
@@ -152,6 +180,7 @@ class MultiGrid:
 
 
 # One shared manager for the web session (paper).
+_MANAGER: "MultiGrid | None" = None
 
 
 def get_manager(exchange: str = "binance") -> MultiGrid:

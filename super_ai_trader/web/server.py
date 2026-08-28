@@ -121,6 +121,15 @@ def _notify_test(payload: dict) -> dict:
     return test_channels(payload)
 
 
+def _multigrid_retune(payload: dict) -> dict:
+    from ..exchange.multibot import get_manager
+    mgr = get_manager(payload.get("exchange", "binance"))
+    coins = payload.get("coins")
+    if isinstance(coins, str):
+        coins = [c.strip() for c in coins.split(",") if c.strip()]
+    return {"results": mgr.auto_retune(coins)}
+
+
 def _safe_stop_then_restart() -> dict:
     """PRIORITY: fully stop the bot before any restart."""
     import time as _time
@@ -726,6 +735,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_notify_save(payload))
         elif u.path == "/api/notify/test":
             self._send(_notify_test(payload))
+        elif u.path == "/api/multigrid/retune":
+            self._send(_multigrid_retune(payload))
         elif u.path == "/api/multigrid/stop":
             self._send(_multigrid_stop())
         elif u.path == "/api/safe-stop":

@@ -282,6 +282,9 @@ HTML = r"""<!doctype html>
       <button class="btn btn-gray" style="width:auto;flex:1;min-width:160px" onclick="multiRefresh()">&#x1F504; Refresh</button>
     </div>
     <div id="mg_msg" class="fine" style="margin-top:8px"></div>
+    <button class="btn btn-gray" style="margin-top:8px;border-color:#ffc14d;color:#ffe2a8"
+      onclick="multiRetune()">&#x1F9E0; Auto-tune exits for all running coins</button>
+    <div id="mg_tune" class="fine" style="margin-top:8px"></div>
     <div id="mg_summary" class="metrics" style="margin-top:14px"></div>
     <div id="mg_rows" style="margin-top:12px"></div>
     <div id="mg_events" style="margin-top:10px"></div>
@@ -1162,10 +1165,28 @@ async function multiSummary(){
     <div class="metric"><div class="k">Round-trips</div><div class="v">${r.total_round_trips||0}</div></div>
     <div class="metric"><div class="k">Paused / Active</div><div class="v">${(r.paused_coins||[]).length} / ${(r.active_coins||[]).length}</div></div>`;
   // combined event feed (most recent first)
+  const tun=(r.tuning||[]).filter(Boolean);
+  if(tun.length && document.getElementById('mg_tune')){
+    document.getElementById('mg_tune').innerHTML='&#x1F9E0; Last tuned: '+
+      tun.map(t=>`<span class="up">${t.coin} (${t.note})</span>`).join(' &middot; ');
+  }
   const evs=(r.recent_events||[]).slice().reverse();
   document.getElementById('mg_events').innerHTML = evs.length?
     evs.map(e=>`<div style="padding:6px 10px;margin:4px 0;border-radius:8px;background:var(--card2);border:1px solid var(--line);font-size:14px;color:${e.color==='green'?'var(--green)':e.color==='amber'?'#ffd54a':e.color==='red'?'var(--red)':'var(--muted)'}"><b>${e.coin}</b> · ${e.text}</div>`).join('')
     : '<div class="fine">No alerts yet.</div>';
+}
+
+async function multiRetune(){
+  const el=document.getElementById('mg_tune');
+  el.style.color='#ffe2a8'; el.textContent='&#x1F9E0; Learning best exit settings for each coin… (this can take a minute)';
+  const coins=document.getElementById('mg_coins').value;
+  const r=await post('/api/multigrid/retune',{coins});
+  const rows=(r.results||[]).map(x=> x.error
+    ? `<span style="color:#ffc7c7">${x.coin}: ${x.error}</span>`
+    : `<span class="up">&#x2713; ${x.coin}</span>: ${x.note}`);
+  el.style.color='#9af0cd';
+  el.innerHTML='<b>Tuned today:</b> '+rows.join(' &middot; ');
+  multiSummary();
 }
 </script>
 </body>
