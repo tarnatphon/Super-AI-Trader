@@ -806,6 +806,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path)
+        if u.path == "/api/export.csv":
+            from ..export import export_csv
+            csv_text = export_csv()
+            body = csv_text.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Disposition",
+                             'attachment; filename="super-ai-trader-journal.csv"')
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if u.path in ("/", "/index.html"):
             self._page()
         elif u.path == "/api/checklist":

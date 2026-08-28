@@ -490,6 +490,8 @@ HTML = r"""<!doctype html>
       <div class="metric"><div class="k">Grid round-trips</div><div class="v" id="jh_rt">0</div></div>
     </div>
     <button class="btn btn-gray" style="margin-top:12px" onclick="loadHistory()">&#x1F504; Refresh history</button>
+    <a class="btn btn-gray" style="margin-top:12px;text-align:center;text-decoration:none"
+       href="/api/export.csv" download>&#x2B07;&#xFE0F; Download history as CSV</a>
     <div id="jh_list" style="margin-top:12px"></div>
   </div>
 
