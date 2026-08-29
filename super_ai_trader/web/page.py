@@ -1220,10 +1220,13 @@ async function multiRefresh(){
   if(!r||r.count==null) return;
   document.getElementById('mg_rows').innerHTML = (r.coins||[]).map(c=>{
     const roi=c.roi_pct||0;
+    const tone=(c.status_note&&c.status_note.tone)||'muted';
+    const toneColor = tone==='green'?'var(--green)':tone==='amber'?'#ffd54a':tone==='red'?'var(--red)':'var(--muted)';
     const reg = c.paused ? '<span style="color:#ffd54a">&#x23F8; paused</span>' : '<span class="up">&#x2705; on</span>';
+    const note = c.status_note ? `<span style="color:${toneColor}"> &#x2014; ${c.status_note.label}</span>` : '';
     return `<div style="padding:10px 12px;margin:6px 0;border-radius:10px;background:var(--card2);border:1px solid var(--line)">
       <b>${c.coin}</b> &nbsp; price ${c.price} &nbsp; P/L <span class="${roi>=0?'up':'down'}">${roi>=0?'+':''}${roi}%</span>
-      &nbsp; buys ${c.buys||0} / sells ${c.sells||0} &nbsp; ${reg}
+      &nbsp; buys ${c.buys||0} / sells ${c.sells||0} &nbsp; ${reg}${note}
       <div class="fine">${(c.events||[]).slice(-2).map(e=>e.text).join(' · ')}</div></div>`;
   }).join('') || '<div class="fine">No grids running. Press Start.</div>';
   // global alert toasts

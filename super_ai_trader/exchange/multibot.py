@@ -16,6 +16,27 @@ from .connector import ExchangeConnector
 from .live_session import LiveSession
 
 
+
+def _coin_note(st: dict) -> dict:
+    """Plain-language health for a coin's grid."""
+    roi = float(st.get("roi_pct") or 0.0)
+    paused = bool(st.get("paused"))
+    trail = (st.get("trail") or {}).get("state")
+    if trail == "locked":
+        label, tone = "Profit locked", "green"
+    elif roi >= 1.0:
+        label, tone = "In profit", "green"
+    elif roi <= -3.0:
+        label, tone = "Drawdown — watch", "red"
+    elif paused:
+        label, tone = "Paused — crash protection on", "amber"
+    elif roi <= -0.5:
+        label, tone = "Slightly down", "amber"
+    else:
+        label, tone = "Running", "green"
+    return {"label": label, "tone": tone}
+
+
 class MultiGrid:
     def __init__(self, exchange: str = "binance", poll_seconds: float = 8.0,
                  timeframe: str = "1h"):
@@ -143,6 +164,7 @@ class MultiGrid:
                     "trail": (st.get("trail") or {}).get("state"),
                     "running": st.get("running"),
                     "events": st.get("events", [])[-6:],
+                    "status_note": _coin_note(st),
                 })
             except Exception:
                 continue
