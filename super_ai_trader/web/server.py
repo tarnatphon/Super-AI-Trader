@@ -830,7 +830,7 @@ def _botdetails(payload: dict) -> dict:
 def _connect(payload: dict) -> dict:
     """Save credentials locally (never echoed back)."""
     exchange = payload.get("exchange")
-    if exchange not in ("binance", "gateio"):
+    if exchange not in ("binance","gateio","bybit","okx","kucoin","kraken"):
         return {"ok": False, "error": "choose Binance or Gate.io"}
     name = payload.get("name") or exchange
     api_key = payload.get("api_key", "").strip()

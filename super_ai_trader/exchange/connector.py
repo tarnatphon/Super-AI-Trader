@@ -16,13 +16,26 @@ from dataclasses import dataclass, field
 from ..data.market import Bar
 
 
-# App-friendly venue id -> ccxt exchange class name. (Gate.io's ccxt class is
-# `gate`; the app/UI uses the friendlier label "gateio".)
+# App-friendly venue id -> ccxt exchange class name. Gate.io's ccxt class is
+# `gate` (UI uses "gateio"); Bybit/OKX/KuCoin/Kraken map to their ccxt ids.
 _CCXT_ID = {
     "binance": "binance",
-    "gateio": "gate",
-    "gate": "gate",
+    "gateio": "gate", "gate": "gate",
+    "bybit": "bybit",
+    "okx": "okx",
+    "kucoin": "kucoin", "kucoinn": "kucoin",
+    "kraken": "kraken",
 }
+
+# Venues offered in the UI (id -> display name).
+VENUES = [
+    ("binance", "Binance"),
+    ("gateio", "Gate.io"),
+    ("bybit", "Bybit"),
+    ("okx", "OKX"),
+    ("kucoin", "KuCoin"),
+    ("kraken", "Kraken"),
+]
 
 
 def ccxt_id(exchange_id: str) -> str:

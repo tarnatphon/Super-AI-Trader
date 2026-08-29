@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Super-AI-Trader",
+  "version": "0.1.0",
+  "identifier": "ai.supertrader.app",
+  "build": {
+    "beforeDevCommand": "python ../../../start_app.py",
+    "beforeBuildCommand": "python ../../../start_app.py",
+    "frontendDist": "../dist",
+    "devUrl": "http://127.0.0.1:8787"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Super-AI-Trader",
+        "width": 1024,
+        "height": 820,
+        "minWidth": 420,
+        "minHeight": 640,
+        "resizable": true
+      }
+    ],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["../icons/icon.png"]
+  }
+}

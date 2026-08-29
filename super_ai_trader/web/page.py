@@ -9,7 +9,8 @@ HTML = r"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1420">
 <title>Super-AI-Trader</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%2329c484'/><path d='M22 66 L42 50 L58 58 L78 34' fill='none' stroke='white' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/><circle cx='78' cy='34' r='6' fill='white'/></svg>">
 <style>
@@ -88,6 +89,24 @@ HTML = r"""<!doctype html>
   .pick{padding:12px 14px;margin:8px 0;border-radius:12px;background:var(--card2);border:2px solid var(--line);cursor:pointer}
   .pick:hover{border-color:var(--accent)} .pick.sel{border-color:var(--green)}
   @media(max-width:560px){.metrics{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
+
+  /* Mobile / phone remote (Tailscale): bigger touch targets, compact layout */
+  @media (max-width:640px){
+    body{font-size:16px;padding:0 0 40px}
+    .wrap{padding:0 12px}
+    .card{padding:16px;margin:12px 0;border-radius:14px}
+    .logo{font-size:24px}
+    .btn{font-size:18px;padding:16px 18px}
+    .chip{font-size:15px;padding:11px 14px}
+    input,select{font-size:17px;padding:14px}
+    .metrics{grid-template-columns:1fr 1fr}
+    .metric .v{font-size:19px}
+    svg{height:140px}
+    .mode button{width:100%}
+    #emergencyBtn{font-size:18px;padding:15px;position:sticky;bottom:10px;z-index:40;
+      box-shadow:0 6px 18px rgba(0,0,0,.5)}
+  }
+  @media (max-width:380px){ .metrics{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
@@ -303,8 +322,12 @@ HTML = r"""<!doctype html>
       <div>
         <label>Exchange</label>
         <select id="mg_exchange" onchange="multiSummary()">
-          <option value="binance">Binance (lower fees, deep liquidity)</option>
-          <option value="gateio">Gate.io (more coins / fallback)</option>
+          <option value="binance">Binance</option>
+          <option value="gateio">Gate.io</option>
+          <option value="bybit">Bybit</option>
+          <option value="okx">OKX</option>
+          <option value="kucoin">KuCoin</option>
+          <option value="kraken">Kraken</option>
         </select>
       </div>
       <div></div>
@@ -350,7 +373,7 @@ HTML = r"""<!doctype html>
       to see the past result, then Start to watch it live.</p>
     <div class="row">
       <div><label>Exchange</label>
-        <select id="lv_ex"><option value="binance">Binance</option><option value="gateio">Gate.io</option></select>
+        <select id="lv_ex"><option value="binance">Binance</option><option value="gateio">Gate.io</option><option value="bybit">Bybit</option><option value="okx">OKX</option><option value="kucoin">KuCoin</option><option value="kraken">Kraken</option></select>
       </div>
       <div><label>Coin</label>
         <select id="lv_coin"><option>SOL</option><option>BTC</option><option>ETH</option><option>BNB</option></select>
@@ -526,8 +549,12 @@ HTML = r"""<!doctype html>
     <p class="help">Only needed for real trading. <b>Create a TRADE-ONLY key on the exchange and
       turn WITHDRAWALS OFF.</b> Your key is encrypted on this computer and never shown again.</p>
     <label>Exchange</label>
-    <select id="ex"><option value="binance">Binance (recommended — lower fees, deep liquidity)</option>
-      <option value="gateio">Gate.io (more coins)</option></select>
+    <select id="ex"><option value="binance">Binance</option>
+      <option value="gateio">Gate.io</option>
+      <option value="bybit">Bybit</option>
+      <option value="okx">OKX</option>
+      <option value="kucoin">KuCoin</option>
+      <option value="kraken">Kraken</option></select>
     <label>Save under name</label><input id="cname" value="my-binance">
     <label>API key</label><input id="apikey" type="password" placeholder="paste key">
     <label>API secret</label><input id="apisecret" type="password" placeholder="paste secret">
