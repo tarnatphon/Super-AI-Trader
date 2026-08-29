@@ -19,6 +19,12 @@ def _path() -> str:
 _DEFAULTS = {
     "ai_model": None,        # e.g. "qwen3:4b"; None = built-in simple parser
     "ai_chosen": False,      # has the user made a first-run choice?
+    "autostart_enabled": False,   # auto-start paper grids on app launch
+    "autostart_coins": "BNB,SOL,ETH",
+    "autostart_exchange": "binance",
+    "autostart_investment": 1000,
+    "autostart_range": 12,
+    "autostart_grid_count": 25,
 }
 
 

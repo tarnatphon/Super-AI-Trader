@@ -359,6 +359,14 @@ HTML = r"""<!doctype html>
     <button class="btn btn-gray" style="margin-top:8px;border-color:#ffc14d;color:#ffe2a8"
       onclick="multiRetune()">&#x1F9E0; Auto-tune exits for all running coins</button>
     <div id="mg_tune" class="fine" style="margin-top:8px"></div>
+    <div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:12px">
+      <label style="display:flex;gap:10px;align-items:center">
+        <input type="checkbox" id="as_enabled" style="width:auto" onchange="autostartSave()">
+        <b>&#x267B;&#xFE0F; Auto-start these grids when the app opens</b>
+      </label>
+      <div class="fine" style="margin-top:4px">Great for an always-on Mac: after a restart or power cut the bot starts in practice mode by itself (safety still applies).</div>
+      <div id="as_status" class="fine"></div>
+    </div>
     <div id="mg_daily" class="fine" style="margin-top:6px"></div>
     <div id="mg_summary" class="metrics" style="margin-top:14px"></div>
     <div id="mg_rows" style="margin-top:12px"></div>
@@ -964,6 +972,7 @@ async function loadChecklist(){
 loadChecklist();
 refreshPresets();
 loadMarket();
+autostartLoad().then(autostartApply);
 loadHistory();
 loadAILibrary();
 loadNotify();
@@ -1483,6 +1492,32 @@ async function emergencyStop(){
 function setCoins(list){
   const el=document.getElementById('mg_coins');
   if(el){ el.value=list; el.scrollIntoView({behavior:'smooth',block:'center'}); }
+}
+
+async function autostartLoad(){
+  try{ const r=await post('/api/autostart/get',{});
+    document.getElementById('as_enabled').checked=!!r.autostart_enabled;
+    if(r.autostart_coins) document.getElementById('mg_coins').value=r.autostart_coins;
+  }catch(e){}
+}
+async function autostartSave(){
+  await post('/api/autostart/set',{
+    autostart_enabled: document.getElementById('as_enabled').checked,
+    autostart_coins: document.getElementById('mg_coins').value,
+    autostart_exchange: mgEx(),
+    autostart_investment: parseFloat(document.getElementById('mg_inv').value||1000),
+    autostart_range: parseFloat(document.getElementById('mg_range').value||12),
+    autostart_grid_count: parseInt(document.getElementById('mg_grids').value||25)
+  });
+}
+async function autostartApply(){
+  try{
+    const r=await post('/api/autostart/apply',{});
+    if(r.started && r.count!==0){
+      toast('Auto-started '+r.count+' practice grids','green');
+      multiRefresh(); multiSummary();
+    }
+  }catch(e){}
 }
 </script>
 </body>

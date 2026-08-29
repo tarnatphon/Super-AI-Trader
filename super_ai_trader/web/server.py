@@ -299,6 +299,42 @@ def _live_grid_status() -> dict:
     return get_live_manager().overview()
 
 
+def _autostart_get() -> dict:
+    from .. import config
+    return {k: config.get(k) for k in (
+        "autostart_enabled", "autostart_coins", "autostart_exchange",
+        "autostart_investment", "autostart_range", "autostart_grid_count")}
+
+
+def _autostart_set(payload: dict) -> dict:
+    from .. import config
+    keys = ["autostart_enabled", "autostart_coins", "autostart_exchange",
+            "autostart_investment", "autostart_range", "autostart_grid_count"]
+    updates = {k: payload[k] for k in keys if k in payload}
+    config.save(updates)
+    return {"ok": True, **_autostart_get()}
+
+
+def _autostart_apply() -> dict:
+    """On dashboard load, if enabled, start the saved paper grids."""
+    from .. import config
+    if not config.get("autostart_enabled", False):
+        return {"started": False}
+    coins = [c.strip() for c in (config.get("autostart_coins") or "BNB").split(",") if c.strip()]
+    ex = config.get("autostart_exchange", "binance")
+    from ..exchange.multibot import get_manager
+    try:
+        r = get_manager(ex).start(
+            coins,
+            investment=float(config.get("autostart_investment", 1000)),
+            range_pct=float(config.get("autostart_range", 12)),
+            grids=int(config.get("autostart_grid_count", 25)),
+        )
+        return {"started": True, "exchange": ex, **r}
+    except Exception as e:
+        return {"started": False, "error": str(e)}
+
+
 def _emergency_stop(payload: dict) -> dict:
     """Global kill: cancel every paper grid across all venues and, if a
     vault password is supplied, cancel open real orders for the saved key.
@@ -993,6 +1029,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_multigrid_retune(payload))
         elif u.path == "/api/multigrid/stop":
             self._send(_multigrid_stop())
+        elif u.path == "/api/autostart/get":
+            self._send(_autostart_get())
+        elif u.path == "/api/autostart/set":
+            self._send(_autostart_set(payload))
+        elif u.path == "/api/autostart/apply":
+            self._send(_autostart_apply())
         elif u.path == "/api/emergency-stop":
             self._send(_emergency_stop(payload))
         elif u.path == "/api/safe-stop":
