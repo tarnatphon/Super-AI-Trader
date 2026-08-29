@@ -88,17 +88,28 @@ def _multigrid_start(payload: dict) -> dict:
     if isinstance(coins, str):
         coins = [c.strip() for c in coins.split(",") if c.strip()]
     mgr = get_manager(payload.get("exchange", "binance"))
+    dd = payload.get("max_drawdown_pct", None)
+    try:
+        dd = float(dd) if dd not in (None, "", 0) else None
+    except Exception:
+        dd = None
     return mgr.start(
         coins,
         investment=float(payload.get("investment", 1000)),
         range_pct=float(payload.get("range_pct", 12)),
         grids=int(payload.get("grids", 25)),
+        max_drawdown_pct=dd,
     )
 
 
 def _multigrid_status(exchange: str = "binance") -> dict:
     from ..exchange.multibot import get_manager
     return get_manager(exchange).overview()
+
+
+def _multigrid_drawdown() -> dict:
+    from ..exchange.multibot import get_manager
+    return get_manager().check_drawdown()
 
 
 def _multigrid_stop() -> dict:
@@ -954,6 +965,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_ai_install(payload))
         elif u.path == "/api/restart":
             self._send(_safe_stop_then_restart())
+        elif u.path == "/api/multigrid/drawdown":
+            self._send(_multigrid_drawdown())
         elif u.path == "/api/multigrid/start":
             self._send(_multigrid_start(payload))
         elif u.path == "/api/notify/get":

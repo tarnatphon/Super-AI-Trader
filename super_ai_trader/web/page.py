@@ -316,6 +316,11 @@ HTML = r"""<!doctype html>
       <div><label>Range width %</label><input id="mg_range" type="number" value="12"></div>
       <div><label>Grid lines</label><input id="mg_grids" type="number" value="25"></div>
     </div>
+    <div class="row">
+      <div><label>Auto-stop if basket drops by % (0=off)</label>
+        <input id="mg_dd" type="number" value="5"></div>
+      <div class="fine" style="align-self:end">If total practice P/L falls this much, all grids stop automatically and you get an alert.</div>
+    </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
       <button class="btn btn-green" style="width:auto;flex:1;min-width:160px" onclick="multiStart()">&#x25B6;&#xFE0F; Start grids</button>
       <button class="btn" style="width:auto;flex:1;min-width:160px;background:#3a2030;color:#ffb3b3" onclick="multiStop()">&#x23F9;&#xFE0F; Stop all grids (safe)</button>
@@ -1159,7 +1164,8 @@ async function multiStart(){
     coins:document.getElementById('mg_coins').value,
     investment:parseFloat(document.getElementById('mg_inv').value||1000),
     range_pct:parseFloat(document.getElementById('mg_range').value||12),
-    grids:parseInt(document.getElementById('mg_grids').value||25)
+    grids:parseInt(document.getElementById('mg_grids').value||25),
+    max_drawdown_pct: -Math.abs(parseFloat(document.getElementById('mg_dd').value||0))
   });
   msg.style.color = r.ok ? '#9af0cd':'#ffc7c7';
   const ok=(r.started||[]).filter(x=>x.ok).length;
@@ -1193,7 +1199,18 @@ async function multiRefresh(){
     if(!_mgSeen.has(key)){ _mgSeen.add(key); toast(c.coin+': '+e.text, e.color); }
   }));
 }
-setInterval(()=>{ try{ if(document.getElementById('mg_rows')){ multiRefresh(); multiSummary(); } }catch(e){} }, 6000);
+setInterval(()=>{ try{
+  if(document.getElementById('mg_rows')){ multiRefresh(); multiSummary(); checkDrawdown(); }
+}catch(e){} }, 6000);
+async function checkDrawdown(){
+  const r=await post('/api/multigrid/drawdown',{exchange:mgEx()});
+  if(r && r.tripped){
+    toast('AUTO STOP: '+r.reason,'red');
+    const el=document.getElementById('mg_msg');
+    if(el){ el.style.color='#ffb3b3'; el.textContent='🛑 '+r.reason; }
+    multiRefresh(); multiSummary();
+  }
+}
 
 async function loadNotify(){
   try{

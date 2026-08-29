@@ -26,12 +26,22 @@ class MultiGrid:
         self.running = False
         self.tuning: dict[str, dict] = {}   # per-coin last tuning result
         self.last_retune_day = None
+        self.max_drawdown_pct = None      # e.g. -3.0 -> auto-stop if basket < -3%
+        self.kill_tripped = False
+        self.kill_reason = None
         self._lock = threading.Lock()
 
     def start(self, coins: list[str], investment: float = 1000.0,
               range_pct: float = 12.0, grids: int = 25,
-              range_pct_map: dict | None = None) -> dict:
-        """Start (or restart) paper grids for the given coins. Non-blocking."""
+              range_pct_map: dict | None = None,
+              max_drawdown_pct: float | None = None) -> dict:
+        """Start (or restart) paper grids for the given coins. Non-blocking.
+
+        max_drawdown_pct: if set (negative, e.g. -3.0), auto-stop ALL grids
+        when the basket's total P/L falls below that percent."""
+        self.max_drawdown_pct = max_drawdown_pct
+        self.kill_tripped = False
+        self.kill_reason = None
         self.stop()  # clear any previous set first
         range_pct_map = range_pct_map or {}
         started = []
@@ -65,6 +75,28 @@ class MultiGrid:
             started.append({"coin": coin, "ok": True, "price": round(ref, 6)})
         self.running = bool(self.sessions)
         return {"ok": self.running, "started": started, "count": len(self.sessions)}
+
+    def check_drawdown(self) -> dict:
+        """If total basket P/L breaches the drawdown threshold, stop all
+        grids and report it. Safe to call on every poll."""
+        if self.kill_tripped or self.max_drawdown_pct is None:
+            return {"tripped": False}
+        summ = self.summary()
+        pct = summ.get("total_pnl_pct", 0.0) or 0.0
+        if summ["count"] > 0 and pct <= float(self.max_drawdown_pct):
+            self.kill_tripped = True
+            self.kill_reason = (f"Basket drawdown {pct:.2f}% reached the "
+                                f"{self.max_drawdown_pct:.1f}% limit — auto-stopped all grids.")
+            self.stop()
+            try:
+                from ..notify import notify
+                notify("Super-AI-Trader AUTO STOP", self.kill_reason)
+                from ..journal import record_event
+                record_event("drawdown kill-switch", "ALL")
+            except Exception:
+                pass
+            return {"tripped": True, "reason": self.kill_reason, "pct": pct}
+        return {"tripped": False, "pct": pct}
 
     def stop(self) -> dict:
         from .shutdown import stop_all
@@ -213,6 +245,9 @@ class MultiGrid:
             "paused_coins": paused,
             "active_coins": active,
             "recent_events": all_events[-15:],
+            "kill_tripped": self.kill_tripped,
+            "kill_reason": self.kill_reason,
+            "max_drawdown_pct": self.max_drawdown_pct,
         }
 
 
