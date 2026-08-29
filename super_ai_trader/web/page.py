@@ -184,6 +184,18 @@ HTML = r"""<!doctype html>
     <div class="fine">Tip: keep it in <b>paper/practice</b> until you&#39;ve seen many rounds. Alerts can go to your phone/email in <b>Get alerts</b>.</div>
   </div>
 
+  <!-- FIRST-RUN SETUP -->
+  <div class="card" id="setupWizard" style="border-color:#ffc14d">
+    <h2>&#x1F44B; First time here? 3 steps</h2>
+    <p class="help">You are in safe PRACTICE mode. Tick these off as you go — this card hides itself when done.</p>
+    <div id="wizardSteps" style="line-height:2">
+      <div id="wiz_conn">&#x25CB; Tap <b>&#x1F50C; Test connection</b> on the Live Market card (needs live data).</div>
+      <div id="wiz_demo">&#x25CB; Press <b>&#x25B6; Start a quick demo</b> to watch a practice BNB grid run.</div>
+      <div id="wiz_grid">&#x25CB; Let it run a while, then check <b>&#x1F916; Multi-coin grids</b> &rarr; History for results.</div>
+    </div>
+    <button class="btn btn-gray" onclick="dismissWizard()" style="margin-top:10px">Done / hide this</button>
+  </div>
+
   <!-- LIVE MARKET CHART -->
   <div class="card">
     <h2>📈 Live market</h2>
@@ -1215,7 +1227,7 @@ async function multiStart(){
   msg.innerHTML = r.ok ? ('&#x2705; Started '+ok+' grid(s) '+
       (bad.length?('<br>failed: '+bad.map(b=>b.coin+' ('+b.error.slice(0,40)+')').join(', ')):''))
     : ('&#x26A0;&#xFE0F; Could not start grids. Install ccxt and check internet, then Test connection.');
-  if(r.ok){ multiRefresh(); multiSummary(); }
+  if(r.ok){ multiRefresh(); multiSummary(); localStorage.setItem('wiz_demo','1'); localStorage.setItem('wiz_grid','1'); refreshWizard(); }
 }
 async function multiStop(){
   const msg=document.getElementById('mg_msg');
@@ -1519,6 +1531,31 @@ async function autostartApply(){
     }
   }catch(e){}
 }
+
+function markWiz(id, ok){
+  const el=document.getElementById('wiz_'+id);
+  if(!el) return;
+  el.innerHTML = (ok?'<span class="up">&#x2705;</span>':'<span class="flat">&#x25CB;</span>') + ' ' +
+    el.innerHTML.replace(/^[^<]*/,'');
+  if(ok){
+    el.style.opacity=0.65;
+    if(!localStorage.getItem('wiz_'+id)) localStorage.setItem('wiz_'+id,'1');
+  }
+}
+function refreshWizard(){
+  ['conn','demo','grid'].forEach(id=>markWiz(id, !!localStorage.getItem('wiz_'+id)));
+  const doneCount=['conn','demo','grid'].filter(id=>localStorage.getItem('wiz_'+id)).length;
+  const card=document.getElementById('setupWizard');
+  if(card && (localStorage.getItem('wiz_dismissed')||doneCount>=3)) card.style.display='none';
+}
+function dismissWizard(){
+  localStorage.setItem('wiz_dismissed','1');
+  const card=document.getElementById('setupWizard'); if(card) card.style.display='none';
+}
+// mark demo/grid when relevant flows succeed
+const _origMultiStart=(typeof multiStart==='function')?multiStart:null;
+window.addEventListener('DOMContentLoaded',refreshWizard);
+refreshWizard();
 </script>
 </body>
 </html>
