@@ -335,6 +335,23 @@ def _autostart_apply() -> dict:
         return {"started": False, "error": str(e)}
 
 
+def _languages() -> dict:
+    from ..i18n import supported
+    from .. import config
+    return {"languages": [{"code": c, "name": n} for c, n in supported()],
+            "current": config.get("lang", "en")}
+
+
+def _set_language(payload: dict) -> dict:
+    from .. import config
+    from ..i18n import t as _t
+    lang = payload.get("lang", "en")
+    config.save({"lang": lang})
+    # return the full label dictionary so the page can localize.
+    from ..i18n import LANG
+    return {"ok": True, "lang": lang, "labels": LANG.get(lang, LANG["en"])}
+
+
 def _emergency_stop(payload: dict) -> dict:
     """Global kill: cancel every paper grid across all venues and, if a
     vault password is supplied, cancel open real orders for the saved key.
@@ -986,6 +1003,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send({"checklist": security_checklist()})
         elif u.path == "/api/connections":
             self._send(_list_connections())
+        elif u.path == "/api/languages":
+            self._send(_languages())
         elif u.path == "/api/live/status":
             self._send(_live_status())
         elif u.path == "/api/multigrid/status":
@@ -1080,6 +1099,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_autostart_set(payload))
         elif u.path == "/api/autostart/apply":
             self._send(_autostart_apply())
+        elif u.path == "/api/languages":
+            self._send(_languages())
+        elif u.path == "/api/language/set":
+            self._send(_set_language(payload))
         elif u.path == "/api/emergency-stop":
             self._send(_emergency_stop(payload))
         elif u.path == "/api/safe-stop":

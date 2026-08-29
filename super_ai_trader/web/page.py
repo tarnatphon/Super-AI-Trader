@@ -135,6 +135,18 @@ HTML = r"""<!doctype html>
              box-shadow:0 8px 20px rgba(0,0,0,.35);cursor:pointer;width:100%;max-width:560px">
       &#x1F6D1; EMERGENCY STOP &mdash; cancel ALL orders</button>
     <div id="emergencyNote" class="fine" style="margin-top:8px"></div>
+    <div id="startupNotice" style="display:none;margin-top:12px;border-radius:12px;padding:12px 16px;font-size:16px"></div>
+    <div style="margin-top:12px">
+      <label class="fine" for="langSel">&#x1F310; Language:</label>
+      <select id="langSel" onchange="setLanguage(this.value)"
+              style="width:auto;padding:8px 12px;font-size:15px;display:inline-block;margin-left:6px">
+        <option value="en">English</option>
+        <option value="th">ไทย</option>
+        <option value="zh">中文</option>
+        <option value="vi">Tiếng Việt</option>
+        <option value="es">Español</option>
+      </select>
+    </div>
   </header>
 
   <div class="mode">
@@ -1010,6 +1022,7 @@ loadChecklist();
 refreshPresets();
 loadMarket();
 autostartLoad().then(autostartApply);
+const _savedLang=localStorage.getItem('lang')||'en'; loadLanguage(_savedLang).then(()=>{const ls=document.getElementById('langSel'); if(ls) ls.value=_savedLang;});
 loadHistory();
 loadAILibrary();
 loadNotify();
@@ -1721,6 +1734,29 @@ function attachCandleCrosshair(big){
   });
 }
 setTimeout(()=>{ attachCandleCrosshair(false); attachCandleCrosshair(true); },1500);
+
+let _labels={};
+function tr(k){ return _labels[k]||k; }
+async function loadLanguage(lang){
+  const r=await post('/api/language/set',{lang:lang||'en'});
+  if(r && r.labels){ _labels=r.labels; applyLanguage(); }
+}
+async function setLanguage(lang){
+  await loadLanguage(lang); localStorage.setItem('lang',lang);
+}
+function applyLanguage(){
+  // static labeled elements
+  const map=[
+    ['practice','modePractice'],
+    ['connect','modeLive']
+  ];
+  // dynamic labels used across feeds are looked up via tr() at render time;
+  // re-run refreshers so the new labels appear.
+  try{ multiRefresh(); multiSummary(); }catch(e){}
+  const es=document.getElementById('emergencyBtn');
+  if(es && tr('emergency')) es.innerHTML='&#x1F6D1; '+tr('emergency');
+}
+function _currentLang(){ return document.getElementById('langSel')?document.getElementById('langSel').value:'en'; }
 </script>
 </body>
 </html>
