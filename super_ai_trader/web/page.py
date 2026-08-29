@@ -293,6 +293,12 @@ HTML = r"""<!doctype html>
   <!-- MULTI-COIN GRIDS -->
   <div class="card">
     <h2>&#x1F916; Multi-coin grids (practice money)</h2>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+      <button class="chip" onclick="setCoins('BTC,ETH,BNB')">Blue chips: BTC/ETH/BNB</button>
+      <button class="chip" onclick="setCoins('BNB,SOL,ETH')">Momentum: BNB/SOL/ETH</button>
+      <button class="chip" onclick="setCoins('BTC')">Single: BTC</button>
+      <button class="chip" onclick="setCoins('SOL')">Single: SOL</button>
+    </div>
     <div class="row">
       <div>
         <label>Exchange</label>
@@ -1442,6 +1448,11 @@ async function emergencyStop(){
   note.style.color='#9af0cd';
   note.textContent='✅ All paper grids stopped'+(r.live?('; cancelled '+r.live.cancelled+' real orders on '+r.live.exchange):' (real orders only if a vault password was entered).');
   toast('EMERGENCY STOP done — all orders cancelled','red');
+}
+
+function setCoins(list){
+  const el=document.getElementById('mg_coins');
+  if(el){ el.value=list; el.scrollIntoView({behavior:'smooth',block:'center'}); }
 }
 </script>
 </body>
