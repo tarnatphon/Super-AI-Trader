@@ -1364,11 +1364,12 @@ async function multiSummary(){
   let r; try{ r=await apiGet('/api/multigrid/summary?exchange='+mgEx()); }catch(e){ return; }
   if(!r) return;
   const pnl=r.total_pnl||0;
+  const dp=r.daily_pnl||0;
   document.getElementById('mg_summary').innerHTML = `
     <div class="metric"><div class="k">Grids running</div><div class="v">${r.count||0}</div></div>
+    <div class="metric"><div class="k">Today P/L</div><div class="v"><span class="${dp>=0?'up':'down'}">${dp>=0?'+':''}${fmt(dp)}</span> <span style="font-size:14px">(${r.daily_pnl_pct||0}%)</span></div></div>
     <div class="metric"><div class="k">Total P/L</div><div class="v"><span class="${pnl>=0?'up':'down'}">${pnl>=0?'+':''}${fmt(pnl)}</span> <span style="font-size:14px">(${r.total_pnl_pct||0}%)</span></div></div>
-    <div class="metric"><div class="k">Round-trips</div><div class="v">${r.total_round_trips||0}</div></div>
-    <div class="metric"><div class="k">Paused / Active</div><div class="v">${(r.paused_coins||[]).length} / ${(r.active_coins||[]).length}</div></div>`;
+    <div class="metric"><div class="k">Round-trips / Paused</div><div class="v">${r.total_round_trips||0} · ${(r.paused_coins||[]).length}</div></div>`;
   // combined event feed (most recent first)
   const tun=(r.tuning||[]).filter(Boolean);
   if(tun.length && document.getElementById('mg_tune')){

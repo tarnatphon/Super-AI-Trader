@@ -49,6 +49,8 @@ class MultiGrid:
         self.last_retune_day = None
         self.max_drawdown_pct = None      # e.g. -3.0 -> auto-stop if basket < -3%
         self.kill_tripped = False
+        self.day_start_pnl = 0.0          # basket P/L at the local midnight boundary
+        self.day_key = None
         self.kill_reason = None
         self._lock = threading.Lock()
 
@@ -245,6 +247,13 @@ class MultiGrid:
         ov = self.overview()
         coins = ov["coins"]
         total_pnl = round(sum(c.get("pnl") or 0 for c in coins), 2)
+        import datetime as _dt
+        today = _dt.date.today().isoformat()
+        if self.day_key != today:
+            # first read of a new day: pin "start of day" P/L at current total
+            self.day_key = today
+            self.day_start_pnl = total_pnl
+        daily_pnl = round(total_pnl - self.day_start_pnl, 2)
         total_inv = 0.0
         for c in coins:
             sess = self.sessions.get(c["coin"])
@@ -269,7 +278,10 @@ class MultiGrid:
             "tuning": [self.tuning.get(c["coin"]) for c in coins if c["coin"] in self.tuning],
             "last_retune_day": self.last_retune_day,
             "total_pnl": total_pnl,
+            "daily_pnl": daily_pnl,
+            "day": today,
             "total_pnl_pct": round(total_pnl / total_inv * 100, 2) if total_inv else 0.0,
+            "daily_pnl_pct": round(daily_pnl / total_inv * 100, 2) if total_inv else 0.0,
             "total_round_trips": total_rt,
             "total_buys": total_buys,
             "total_sells": total_sells,
