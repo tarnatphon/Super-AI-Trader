@@ -236,6 +236,7 @@ HTML = r"""<!doctype html>
     <svg id="candleChart" viewBox="0 0 800 380" preserveAspectRatio="none"
          style="width:100%;height:380px;background:#0b111c;border:1px solid var(--line);border-radius:12px;margin-top:6px"></svg>
     <div class="fine" id="mk_legend" style="margin-top:6px"></div>
+    <div class="fine" id="mk_ohlc" style="margin-top:2px;font-weight:700"></div>
   </div>
 
   <!-- ENLARGED CHART MODAL -->
@@ -380,6 +381,11 @@ HTML = r"""<!doctype html>
       <div><label>Auto-stop if basket drops by % (0=off)</label>
         <input id="mg_dd" type="number" value="5"></div>
       <div class="fine" style="align-self:end">If total practice P/L falls this much, all grids stop automatically and you get an alert.</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
+      <button class="chip" style="border-color:#29c484;color:#9af0cd" onclick="setStrategy('safe')">&#x1F6E1; Conservative</button>
+      <button class="chip" style="border-color:#ffc14d;color:#ffe2a8" onclick="setStrategy('balanced')">&#x2696;&#xFE0F; Balanced</button>
+      <button class="chip" style="border-color:#ff6b6b;color:#ffb3b3" onclick="setStrategy('aggressive')">&#x26A1; Aggressive</button>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
       <button class="btn btn-green" style="width:auto;flex:1;min-width:160px" onclick="multiStart()">&#x25B6;&#xFE0F; Start grids</button>
@@ -1610,6 +1616,7 @@ refreshWizard();
 // ---- Professional candlestick chart ----
 function renderCandles(elId, m, big){
   const svg=document.getElementById(elId); if(!svg||!m||!m.candles) return;
+  svg._m=m;
   const W=big?1000:800, H=big?560:380, padL=8,padR=62,padT=14,padB=22;
   const candles=m.candles;
   let lo=Infinity, hi=-Infinity;
@@ -1682,6 +1689,37 @@ function sparklineSvg(vals, roi){
     <path d="${d}" fill="none" stroke="${col}" stroke-width="2"/>
   </svg>`;
 }
+
+function setStrategy(kind){
+  // range%, grid lines, drawdown%
+  const map={safe:{range:8, grids:35, dd:3}, balanced:{range:12, grids:25, dd:5}, aggressive:{range:20, grids:18, dd:8}};
+  const m=map[kind]||map.balanced;
+  document.getElementById('mg_range').value=m.range;
+  document.getElementById('mg_grids').value=m.grids;
+  document.getElementById('mg_dd').value=m.dd;
+  toast('Strategy: '+kind+' (range '+m.range+'%, grids '+m.grids+', auto-stop -'+m.dd+'%)',
+        kind==='aggressive'?'red':'green');
+}
+
+// Candle crosshair + OHLC hover
+function attachCandleCrosshair(big){
+  const svg=document.getElementById(big?'candleChartBig':'candleChart');
+  if(!svg||svg._cross) return; svg._cross=true;
+  svg.addEventListener('mousemove',(ev)=>{
+    const r=svg.getBoundingClientRect();
+    const Wbig=svg.id==='candleChartBig'?1000:800;
+    const padRbig=svg.id==='candleChartBig'?62:62;
+    const x=(ev.clientX-r.left)/r.width*Wbig;
+    const m=svg._m; if(!m||!m.candles) return;
+    const padL=8,padR=62;
+    const cw=(Wbig-padL-padR)/m.candles.length;
+    const idx=Math.round((x-padL)/cw-0.5);
+    const k=m.candles[Math.max(0,Math.min(m.candles.length-1,idx))];
+    let info=document.getElementById(big?'cm_legend':'mk_ohlc');
+    if(info) info.innerHTML='<b>OHLC</b> O '+k.o+'  H '+k.h+'  L '+k.l+'  C '+k.c;
+  });
+}
+setTimeout(()=>{ attachCandleCrosshair(false); attachCandleCrosshair(true); },1500);
 </script>
 </body>
 </html>
