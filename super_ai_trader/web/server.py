@@ -1119,7 +1119,11 @@ class Handler(BaseHTTPRequestHandler):
         elif u.path == "/api/connect":
             self._send(_connect(payload))
         elif u.path == "/api/ask":
-            self._send(run_command(payload.get("text", "")))
+            from .. import config
+            from ..ai.commands import _reply_in_lang
+            res = run_command(payload.get("text", ""), lang=config.get("lang", "en"))
+            res["reply"] = _reply_in_lang(res.get("reply", ""), config.get("lang", "en"))
+            self._send(res)
         elif u.path == "/api/botdetails":
             self._send(_botdetails(payload))
         elif u.path == "/api/preview":

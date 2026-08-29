@@ -77,7 +77,24 @@ def _grid_dict(res) -> dict:
     }
 
 
-def run_command(text: str) -> dict:
+
+def _reply_in_lang(reply: str, lang: str) -> str:
+    """When a non-English language is selected, prepend a localized header."""
+    from ..i18n import LANG
+    if lang == "en" or lang not in LANG:
+        return reply
+    notes = {
+        "th": "🇹🇭 (ตอบภาษาไทย) — หากติดตั้ง Ollama ไว้ AI จะตอบเป็นภาษาไทยให้อัตโนมัติ สรุปผลการวิเคราะห์:",
+        "zh": "🇨🇳（中文）— 已安装 Ollama 时 AI 会自动用中文回答；以下为结果：",
+        "vi": "🇻🇳 (Tiếng Việt) — nếu cài Ollama, AI tự trả lời tiếng Việt. Kết quả:",
+        "es": "🇪🇸 (Español) — con Ollama instalado la IA responde en español. Resultado:",
+    }
+    note = notes.get(lang, "")
+    return note + "\n\n" + reply
+
+
+def run_command(text: str, lang: str = "en") -> dict:
+    self_lang = lang
     """Parse a plain-language instruction and execute the right app function.
     Returns {'intent', 'reply' (plain language), 'data' (structured)}.
     """
