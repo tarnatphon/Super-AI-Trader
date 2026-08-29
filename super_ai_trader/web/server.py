@@ -465,6 +465,51 @@ def _connection_tests(payload: dict) -> dict:
     return {"ok": all(c["ok"] for c in checks), "checks": checks}
 
 
+def _candles(payload: dict) -> dict:
+    """OHLC candles for the big chart (real exchange, else practice)."""
+    ticker = payload.get("ticker", "BTC")
+    exchange = payload.get("exchange", "binance")
+    timeframe = payload.get("timeframe", "1h")
+    limit = int(payload.get("limit", 200))
+    from ..data.indicators import closes, ema
+    try:
+        from ..exchange.connector import ExchangeConnector
+        conn = ExchangeConnector(exchange, paper=True)
+        bars = conn.ohlcv(f"{ticker}/USDT", timeframe=timeframe, limit=limit)
+        source = f"LIVE {exchange}"
+    except Exception as e:
+        bars = get_series(ticker, days=max(300, limit), real=False)
+        source = f"practice ({type(e).__name__})"
+    # candles [t,o,h,l,c,v] (t = seconds)
+    def ts(b):
+        return int(b.date) if str(b.date).isdigit() else None
+    out = []
+    for i, b in enumerate(bars[-limit:]):
+        out.append({"t": i, "o": round(b.open, 6), "h": round(b.high, 6),
+                    "l": round(b.low, 6), "c": round(b.close, 6), "v": round(b.volume, 4)})
+    c = closes(bars)
+    ema7, ema25, ema99 = ema(c, 7), ema(c, 25), ema(c, 99)
+    grid = None
+    if payload.get("show_grid", True):
+        last = c[-1]
+        rp = float(payload.get("range_pct", 12))
+        lvl_buy, lvl_sell = [], []
+        step_gap = max((last * (rp/100))/25, last * 0.004)
+        p = last
+        while lvl_buy.__len__() < 12 and p >= last * (1 - rp/100):
+            lvl_buy.append(round(p, 6)); p -= step_gap
+        p = last
+        while lvl_sell.__len__() < 12 and p <= last * (1 + rp/100):
+            lvl_sell.append(round(p, 6)); p += step_gap
+        grid = {"buy_levels": lvl_buy, "sell_levels": lvl_sell}
+    return {"symbol": f"{ticker}/USDT", "timeframe": timeframe,
+            "source": source, "candles": out,
+            "ema7": [round(x,6) if x else None for x in ema7[-len(out):]],
+            "ema25": [round(x,6) if x else None for x in ema25[-len(out):]],
+            "ema99": [round(x,6) if x else None for x in ema99[-len(out):]],
+            "grid": grid, "last": round(c[-1], 6)}
+
+
 def _market(payload: dict) -> dict:
     """Real exchange candles + EMA 7/25/99 for the live market chart."""
     from ..data.indicators import closes, ema

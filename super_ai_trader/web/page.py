@@ -221,15 +221,34 @@ HTML = r"""<!doctype html>
       </div>
     </div>
     <div class="fine" id="mk_src" style="margin:8px 0"></div>
-    <button class="btn btn-gray" style="margin:6px 0" onclick="testConnection()">🔌 Test connection to Binance / Gate</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-gray" style="width:auto;margin:0;padding:10px 16px" onclick="testConnection()">🔌 Test connection</button>
+      <button class="btn btn-gray" style="width:auto;margin:0;padding:10px 16px" onclick="openChartModal()">⛶ Enlarge chart</button>
+      <label class="fine" style="display:flex;gap:6px;align-items:center;margin-left:auto">
+        <input type="checkbox" id="mk_grid_on" checked onchange="loadMarket()" style="width:auto"> grid
+      </label>
+    </div>
     <div id="connTests" style="margin:10px 0"></div>
-    <div class="big" id="mk_price" style="font-size:28px">–</div>
-    <svg id="marketChart" viewBox="0 0 600 220"></svg>
-    <div class="fine" id="mk_pressure"></div>
-    <label style="margin-top:12px;display:flex;gap:8px;align-items:center;font-weight:700">
-      <input type="checkbox" id="mk_grid_on" checked onchange="loadMarket()" style="width:auto">
-      Show the robot’s buy/sell grid on the chart
-    </label>
+    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:6px 0">
+      <div class="big" id="mk_price" style="font-size:30px;margin:0">–</div>
+      <div class="fine" id="mk_pressure"></div>
+    </div>
+    <svg id="candleChart" viewBox="0 0 800 380" preserveAspectRatio="none"
+         style="width:100%;height:380px;background:#0b111c;border:1px solid var(--line);border-radius:12px;margin-top:6px"></svg>
+    <div class="fine" id="mk_legend" style="margin-top:6px"></div>
+  </div>
+
+  <!-- ENLARGED CHART MODAL -->
+  <div class="modal" id="chartModal">
+    <div class="box" style="max-width:1000px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <h2 id="cmTitle" style="margin:0">Chart</h2>
+        <button class="btn btn-gray" style="width:auto;margin:0;padding:8px 14px" onclick="closeChartModal()">Close ✕</button>
+      </div>
+      <svg id="candleChartBig" viewBox="0 0 1000 560" preserveAspectRatio="none"
+           style="width:100%;height:72vh;background:#0b111c;border:1px solid var(--line);border-radius:12px;margin-top:10px"></svg>
+      <div class="fine" id="cm_legend"></div>
+    </div>
   </div>
 
   <!-- STEP CARD -->
@@ -920,7 +939,7 @@ function drawPreview(pv){
   html+=line(pv.ema7,'#ffd54a',1.4);
   html+=line(pv.ema25,'#ff4dd2',1.4);
   html+=line(pv.ema99,'#b48cff',1.4);
-  svg.innerHTML=html;
+  if(svg) svg.innerHTML=html;
 }
 async function run(){ showResult(await post('/api/simulate', vals())); }
 async function autoset(){
@@ -1004,12 +1023,24 @@ async function loadMarket(){
   document.getElementById('mk_price').innerHTML = m.last+'  '
     +`<span class="${chg>=0?'up':'down'}" style="font-size:20px">${chg>=0?'+':''}${chg}%</span>`;
   drawMarket(m);
+  // big candlestick view
+  try{
+    const cd=await post('/api/candles',{exchange:m._exchange||'binance',
+      ticker:document.getElementById('mk_coin').value,
+      timeframe:document.getElementById('mk_tf').value, limit:160,
+      show_grid:document.getElementById('mk_grid_on')?document.getElementById('mk_grid_on').checked:true,
+      range_pct: parseFloat(document.getElementById('range_pct')?document.getElementById('range_pct').value||12:12)});
+    cd._exchange = body.exchange; _chartData=cd;
+    renderCandles('candleChart', cd, false);
+    document.getElementById('mk_legend').innerHTML =
+      '<span style="color:#ffd54a">&#x25CF; EMA7</span> &nbsp;<span style="color:#ff4dd2">&#x25CF; EMA25</span> &nbsp;<span style="color:#b48cff">&#x25CF; EMA99</span> &nbsp;<span class="up">&#x25CF; buy grid</span> &nbsp;<span style="color:#ff6b6b">&#x25CF; sell grid</span> &middot; '+cd.source;
+  }catch(e){}
   document.getElementById('mk_pressure').textContent = m.pressure
     ? `Live humans: ${m.pressure} · ${Math.round((m.buy_ratio||0.5)*100)}% buying vs ${Math.round((m.sell_ratio||0.5)*100)}% selling`
     : '';
 }
 function drawMarket(m){
-  const svg=document.getElementById('marketChart'); svg.innerHTML='';
+  const svg=document.getElementById('marketChart'); if(svg) svg.innerHTML='';
   const W=600,H=210,pad=30;
   let all=m.closes.concat(m.ema7).concat(m.ema25).concat(m.ema99).filter(x=>x!=null);
   if(m.grid){ const gv=(m.grid.buy_levels||[]).concat(m.grid.sell_levels||[]);
@@ -1035,7 +1066,7 @@ function drawMarket(m){
           `<text x="${pad+136}" y="16" fill="#b48cff" font-size="12">EMA99</text>`+
           `<text x="${W-pad-150}" y="16" fill="#29c484" font-size="12">● buy</text>`+
           `<text x="${W-pad-80}" y="16" fill="#ff6b6b" font-size="12">● sell</text>`;
-  svg.innerHTML=html;
+  if(svg) svg.innerHTML=html;
 }
 async function testConnection(){
   const box=document.getElementById('connTests');
@@ -1556,6 +1587,62 @@ function dismissWizard(){
 const _origMultiStart=(typeof multiStart==='function')?multiStart:null;
 window.addEventListener('DOMContentLoaded',refreshWizard);
 refreshWizard();
+
+// ---- Professional candlestick chart ----
+function renderCandles(elId, m, big){
+  const svg=document.getElementById(elId); if(!svg||!m||!m.candles) return;
+  const W=big?1000:800, H=big?560:380, padL=8,padR=62,padT=14,padB=22;
+  const candles=m.candles;
+  let lo=Infinity, hi=-Infinity;
+  candles.forEach(k=>{ lo=Math.min(lo,k.l); hi=Math.max(hi,k.h); });
+  (m.grid? m.grid.buy_levels.concat(m.grid.sell_levels):[]).forEach(v=>{lo=Math.min(lo,v);hi=Math.max(hi,v);});
+  const span=(hi-lo)||1; lo-=span*0.03; hi+=span*0.03;
+  const Y=v=>padT+(hi-v)/(hi-lo)*(H-padT-padB);
+  const cw=(W-padL-padR)/candles.length;
+  let h='';
+  // grid lines (price scale)
+  for(let g=0; g<=4; g++){ const pv=lo+(span*1.06)*(g/4); const y=Y(pv);
+    h+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#1c2839" stroke-width="1"/>`;
+    h+=`<text x="${W-padR+4}" y="${y+3}" fill="#9fb0c7" font-size="11">${pv.toFixed(pv>1000?0:2)}</text>`; }
+  // robot buy/sell grid ladders
+  if(m.grid){
+    m.grid.buy_levels.forEach(v=>{ const y=Y(v);
+      h+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#29c484" stroke-width="1" opacity="0.35"/>`; });
+    m.grid.sell_levels.forEach(v=>{ const y=Y(v);
+      h+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#ff6b6b" stroke-width="1" opacity="0.35"/>`; });
+  }
+  // candles
+  candles.forEach((k,i)=>{
+    const up=k.c>=k.o, col=up?'#26c281':'#ef5350';
+    const x=padL+i*cw, bw=Math.max(1.5,cw*0.6), cx=x+cw/2;
+    h+=`<line x1="${cx}" y1="${Y(k.h)}" x2="${cx}" y2="${Y(k.l)}" stroke="${col}" stroke-width="1"/>`;
+    const yO=Y(k.o), yC=Y(k.c);
+    h+=`<rect x="${cx-bw/2}" y="${Math.min(yO,yC)}" width="${bw}" height="${Math.max(1,Math.abs(yC-yO))}" fill="${col}"/>`;
+  });
+  // EMAs
+  function ema(arr,col,w){
+    let p=''; let started=false;
+    arr.forEach((v,i)=>{ if(v==null) return; const x=padL+(i+0.5)*cw, y=Y(v);
+      if(!started){p+=`M ${x} ${y}`;started=true;} else p+=` L ${x} ${y}`; });
+    h+=`<path d="${p}" fill="none" stroke="${col}" stroke-width="${w}" opacity="0.9"/>`;
+  }
+  if(m.ema7) ema(m.ema7,'#ffd54a',1.6);
+  if(m.ema25) ema(m.ema25,'#ff4dd2',1.4);
+  if(m.ema99) ema(m.ema99,'#b48cff',1.4);
+  // last price line
+  if(m.last){ const y=Y(m.last);
+    h+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#7fd3ff" stroke-width="1" stroke-dasharray="4 3"/>`; }
+  svg.innerHTML=h;
+}
+let _chartData=null;
+function openChartModal(){
+  const c=document.getElementById('chartModal'); c.classList.add('show');
+  document.getElementById('cmTitle').textContent=(_chartData?(_chartData.symbol+' '):'Chart')+(_chartData?(_chartData.source+' '+_chartData.timeframe):'');
+  if(_chartData){ renderCandles('candleChartBig', _chartData, true);
+    document.getElementById('cm_legend').textContent =
+      (document.getElementById('mk_legend')?document.getElementById('mk_legend').textContent:''); }
+}
+function closeChartModal(){ document.getElementById('chartModal').classList.remove('show'); }
 </script>
 </body>
 </html>
