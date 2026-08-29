@@ -1276,10 +1276,29 @@ async function multiRefresh(){
     const toneColor = tone==='green'?'var(--green)':tone==='amber'?'#ffd54a':tone==='red'?'var(--red)':'var(--muted)';
     const reg = c.paused ? '<span style="color:#ffd54a">&#x23F8; paused</span>' : '<span class="up">&#x2705; on</span>';
     const note = c.status_note ? `<span style="color:${toneColor}"> &#x2014; ${c.status_note.label}</span>` : '';
-    return `<div style="padding:10px 12px;margin:6px 0;border-radius:10px;background:var(--card2);border:1px solid var(--line)">
-      <b>${c.coin}</b> &nbsp; price ${c.price} &nbsp; P/L <span class="${roi>=0?'up':'down'}">${roi>=0?'+':''}${roi}%</span>
-      &nbsp; buys ${c.buys||0} / sells ${c.sells||0} &nbsp; ${reg}${note}
-      <div class="fine">${(c.events||[]).slice(-2).map(e=>e.text).join(' · ')}</div></div>`;
+    const spark = sparklineSvg(c.equity_curve||[], roi);
+    const fills = (c.recent_fills||[]).slice().reverse().slice(0,6).map(f=>{
+      const col=f.side==='buy'?'var(--green)':'var(--red)';
+      const t=f.ts?new Date(f.ts*1000).toLocaleTimeString():'';
+      return `<div style="color:${col};font-size:13px">${t} ${f.side} ${f.amount} @ ${f.price}</div>`;
+    }).join('') || '<div class="fine">no fills yet</div>';
+    return `<div style="padding:12px;margin:8px 0;border-radius:12px;background:var(--card2);border:1px solid var(--line)">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <b style="font-size:18px">${c.coin}</b>
+        <span class="fine">price</span> <b>${c.price}</b>
+        <div style="display:flex;gap:14px;margin-left:auto;flex-wrap:wrap">
+          <span class="fine">P/L&nbsp;<b class="${roi>=0?'up':'down'}" style="font-size:16px">${roi>=0?'+':''}${roi}%</b></span>
+          <span class="fine">buys&nbsp;<b style="color:var(--green)">${c.buys||0}</b></span>
+          <span class="fine">sells&nbsp;<b style="color:var(--red)">${c.sells||0}</b></span>
+          <span>${reg}${note}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
+        <div style="flex:2;min-width:220px"><div class="fine">Equity</div>${spark}</div>
+        <div style="flex:1;min-width:180px"><div class="fine">Recent fills (live)</div>${fills}</div>
+      </div>
+      <div class="fine" style="margin-top:6px">${(c.events||[]).slice(-2).map(e=>e.text).join(' · ')}</div>
+    </div>`;
   }).join('') || '<div class="fine">No grids running. Press Start.</div>';
   // global alert toasts
   (r.coins||[]).forEach(c=>(c.events||[]).forEach(e=>{
@@ -1619,6 +1638,13 @@ function renderCandles(elId, m, big){
     const yO=Y(k.o), yC=Y(k.c);
     h+=`<rect x="${cx-bw/2}" y="${Math.min(yO,yC)}" width="${bw}" height="${Math.max(1,Math.abs(yC-yO))}" fill="${col}"/>`;
   });
+  // volume bars (bottom strip)
+  let vmax=0; candles.forEach(k=>{vmax=Math.max(vmax,k.v||0);});
+  if(vmax>0){ const vh=(H-padB)*0.18, vbase=H-padB;
+    candles.forEach((k,i)=>{ const x=padL+i*cw, bw=Math.max(1.5,cw*0.6);
+      const up=k.c>=k.o; const hgt=(k.v/vmax)*vh;
+      h+=`<rect x="${x+cw/2-bw/2}" y="${vbase-hgt}" width="${bw}" height="${hgt}" fill="${up?'#26c281':'#ef5350'}" opacity="0.28"/>`; });
+  }
   // EMAs
   function ema(arr,col,w){
     let p=''; let started=false;
@@ -1643,6 +1669,19 @@ function openChartModal(){
       (document.getElementById('mk_legend')?document.getElementById('mk_legend').textContent:''); }
 }
 function closeChartModal(){ document.getElementById('chartModal').classList.remove('show'); }
+
+function sparklineSvg(vals, roi){
+  if(!vals || vals.length<2) return '<span class="fine">waiting for data…</span>';
+  const w=320,h=64,min=Math.min(...vals),max=Math.max(...vals),rng=(max-min)||1;
+  const X=i=4+i*(w-12)/(vals.length-1), Y=v=4+(max-v)/rng*(h-12);
+  let d=''; vals.forEach((v,i)=>{d+=(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1);});
+  const col=roi>=0?'#26c281':'#ef5350';
+  let area=d+` L ${X(vals.length-1).toFixed(1)} ${h} L 4 ${h} Z`;
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:64px">
+    <path d="${area}" fill="${col}" opacity="0.12"/>
+    <path d="${d}" fill="none" stroke="${col}" stroke-width="2"/>
+  </svg>`;
+}
 </script>
 </body>
 </html>

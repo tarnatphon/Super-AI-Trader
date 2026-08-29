@@ -151,11 +151,14 @@ class MultiGrid:
             sess = self.sessions[coin]
             try:
                 st = sess.status()
+                curve = [round(v, 2) for v in (st.get("profit_curve") or []) if v is not None]
+                fills = st.get("recent_fills") or []
+                pnl = float(st.get("pnl") or 0.0)
                 rows.append({
                     "coin": coin,
                     "price": st.get("price"),
                     "roi_pct": st.get("roi_pct"),
-                    "pnl": st.get("pnl"),
+                    "pnl": round(pnl, 2),
                     "buys": st.get("matched_buys"),
                     "sells": st.get("matched_sells"),
                     "round_trips": st.get("round_trips"),
@@ -165,6 +168,12 @@ class MultiGrid:
                     "running": st.get("running"),
                     "events": st.get("events", [])[-6:],
                     "status_note": _coin_note(st),
+                    "equity_curve": curve[-60:],
+                    "equity_peak": max(curve) if curve else None,
+                    "equity_low": min(curve) if curve else None,
+                    "recent_fills": [{"side": f.get("side"), "price": f.get("price"),
+                                       "amount": round(f.get("amount", 0), 6),
+                                       "ts": f.get("ts")} for f in fills[-12:]],
                 })
             except Exception:
                 continue
