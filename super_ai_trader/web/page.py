@@ -31,9 +31,8 @@ HTML = r"""<!doctype html>
   .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
 
   /* top bar */
-  header{position:sticky;top:0;z-index:40;background:rgba(10,14,23,.82);
-    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-    border-bottom:1px solid var(--line);margin-bottom:22px}
+  header{margin-bottom:18px}
+  .app-shell{position:relative}
   .wrap.head{padding-top:14px;padding-bottom:12px;text-align:center}
   .logo{font-size:22px;font-weight:800;letter-spacing:.4px;display:flex;align-items:center;justify-content:center;gap:9px}
   .logo .mark{width:30px;height:30px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;
@@ -117,7 +116,7 @@ HTML = r"""<!doctype html>
 
   /* ---- Sidebar layout ---- */
   .app-shell{display:grid;grid-template-columns:220px 1fr;gap:22px;align-items:start}
-  .sidebar{position:sticky;top:74px;background:linear-gradient(180deg,var(--card),var(--panel));
+  .sidebar{position:sticky;top:12px;background:linear-gradient(180deg,var(--card),var(--panel));
     border:1px solid var(--line);border-radius:var(--radius);padding:16px 12px;display:flex;flex-direction:column;gap:4px;
     min-height:420px}
   .side-brand{font-size:16px;font-weight:800;padding:6px 8px 14px;display:flex;align-items:center;gap:8px}
@@ -414,6 +413,7 @@ HTML = r"""<!doctype html>
     <div id="briefLines" class="fine" style="font-size:14px;color:var(--text);line-height:1.7"></div>
     <div id="briefAlerts"></div>
     <div id="watchSummary" style="margin-top:10px"></div>
+    <button class="btn btn-gray" style="width:auto;margin-top:10px" onclick="sendMorningBrief()">🌅 Email/message me this briefing</button>
   </div>
 
   <!-- MULTI-COIN GRIDS -->
@@ -1412,7 +1412,7 @@ async function multiRefresh(){
         </div>
       </div>
       ${c.instruction?`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:${c.instruction.tone==='amber'?'rgba(240,185,11,.1)':c.instruction.tone==='green'?'rgba(22,199,132,.09)':'#0e1626'};border:1px solid ${c.instruction.tone==='amber'?'rgba(240,185,11,.3)':'rgba(22,199,132,.25)'}">
-        <b>&#x1F916; AI instruction [${c.instruction.action}]</b> &mdash; ${c.instruction.headline}
+        <b>&#x1F916; AI instruction [${c.instruction.action}]</b> &mdash; ${c.instruction.headline} <span class="fine">(auto-trading in paper; fills ${(c.buys||0)+(c.sells||0)})</span>
         ${c.instruction.next_buy?`<div class="fine">&#x1F4B9; next BUY LOW ~ <span class="up">${c.instruction.next_buy}</span> &middot; next SELL HIGH ~ <span style="color:var(--red)">${c.instruction.next_sell}</span></div>`:''}
       </div>`:''}
       <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
@@ -1959,6 +1959,13 @@ async function loadWatcher(){
   }catch(e){}
 }
 setInterval(loadWatcher, 20000);
+
+async function sendMorningBrief(){
+  const btn=event&&event.target; if(btn){btn.textContent='Sending…';btn.disabled=true;}
+  const r=await post('/api/morning-brief',{});
+  if(btn){btn.disabled=false;btn.innerHTML='🌅 Email/message me this briefing';}
+  toast(r.sent?'Morning briefing sent ✅':'Set up email/Telegram in Settings to receive it','green');
+}
 </script>
 </body>
 </html>

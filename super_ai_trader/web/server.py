@@ -178,6 +178,28 @@ def _dca_tick() -> None:
                 pass
 
 
+def _morning_brief(payload: dict) -> dict:
+    """Compose the daily watcher/briefing and push it to email/Telegram if
+    configured. Also returns the text so the UI can show it."""
+    try:
+        watch = _watcher()
+    except Exception as e:  # noqa
+        watch = {"summary": [f"watcher unavailable: {e}"]}
+    from ..notify import notify
+    lines = []
+    lines.append("Good morning. 24/7 watcher — best moments now:")
+    for l in watch.get("summary", []):
+        lines.append("• " + l)
+    for v in (watch.get("ranked") or [])[:5]:
+        lines.append(f"  - {v['coin']}: {v['state'].replace('_',' ')} ({v['score']}/100) "
+                     f"price {v['price']} | buy~{v.get('next_buy')} sell~{v.get('next_sell')}")
+    lines.append("")
+    lines.append("Golden rule: BUY LOW, SELL HIGH. Paused coins are protected; never chase.")
+    body = "\n".join(lines)
+    res = notify("Super-AI-Trader daily briefing", body)
+    return {"sent": res.get("sent", False), "channels": res, "body": body}
+
+
 def _watcher() -> dict:
     """24/7 watcher: run over any live multi-grid sessions and rank
     best buy / sell moments across watched coins (paper; no orders)."""
@@ -1189,6 +1211,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_dca_start(payload))
         elif u.path == "/api/dca/stop":
             self._send(_dca_stop(payload))
+        elif u.path == "/api/morning-brief":
+            self._send(_morning_brief(payload))
         elif u.path == "/api/watcher":
             self._send(_watcher())
         elif u.path == "/api/briefing":
