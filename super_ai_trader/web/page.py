@@ -968,9 +968,20 @@ function botDetailsData(b){
   document.getElementById('b_trades').textContent = b.matched_trades_total+' matched';
   document.getElementById('b_ppg').textContent = b.profit_per_grid_pct+'%';
   const src=b.data_source?(' · '+b.data_source):'';
-  document.getElementById('b_info').textContent =
-    `${b.symbol} · ${b.mode} · ${b.grids} grids · range ${b.lower}–${b.upper} · fees ${fmt(b.fees)}${src} · `+
-    (b.stopped?'safety stop triggered':'still running safely');
+  const realized=b.realized_pnl!==undefined?b.realized_pnl:(b.grid_profit||0);
+  const unreal=b.unrealized!==undefined?b.unreal:0;
+  const infoEl=document.getElementById('b_info');
+  if(infoEl){
+    infoEl.innerHTML =
+      `<div style="margin-bottom:6px">`+
+      `<b class="${realized>=0?'up':'down'}">Realized (completed trades): ${realized>=0?'+':''}${fmt(realized)}</b> &nbsp;·&nbsp; `+
+      `<span class="${unreal>=0?'up':'down'}">Unrealized (holding value): ${unreal>=0?'+':''}${fmt(unreal)}</span></div>`;
+  }
+  if(infoEl){
+    infoEl.innerHTML +=
+      `<div class="fine">${b.symbol} · ${b.mode} · ${b.grids} grids · range ${b.lower}–${b.upper} · fees ${fmt(b.fees)}${src} · `+
+      (b.stopped?'safety stop triggered':'still running safely')+`</div>`;
+  }
   drawProfit(b.profit_curve);
   drawPreview(b.preview);
   drawTrail(b.trail);

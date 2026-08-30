@@ -21,6 +21,7 @@ from .assistant import offline_parse, _find_coin
 
 
 INTENTS = {
+    "dca": ["dca", "dollar cost", "recurring", "every day", "weekly"],
     "grid": ["grid", "simulate grid", "set up a grid", "grid bot", "buy low sell high"],
     "analyze": ["analyze", "look at", "what about", "should i buy", "pressure", "buying", "selling", "zone"],
     "backtest": ["backtest", "test the strategy", "test strategy", "how would it do", "run a test"],
@@ -47,6 +48,12 @@ def classify(text: str) -> str:
                               "human", "right now", "depth", "who is buying", "who's buying",
                               "live behavior")):
         return "behavior"
+    # DCA / recurring buy intent (e.g. "$50 BTC every week", "dollar cost average")
+    if any(k in low for k in ("dca", "dollar cost", "recurring", "every day", "every week",
+                              "every month", "daily buy", "weekly", "monthly", "auto-buy",
+                              "auto buy", "average in", "cost average", "each day",
+                              "every friday", "every monday", "periodic")):
+        return "dca"
     # Grid / strategy intents before general safety, so "safe grid" -> grid.
     if any(k in low for k in ("grid", "buy low", "sell high")):
         return "grid"
@@ -125,6 +132,32 @@ def run_command(text: str, lang: str = "en") -> dict:
             + ("The safety stop was triggered — that's the shield protecting the money."
                if res.stopped else "The safety stop was not needed in this test."))
         return {"intent": intent, "reply": reply, "data": {"result": _grid_dict(res)}}
+
+    if intent == "dca":
+        import re as _re
+        low = text.lower()
+        usd = 25.0  # sensible default; override if an explicit $ amount is given
+        _explicit = parsed.get("investment")
+        # detect amount like $50 / 50 usdt
+        m = _re.search(r"\$?\s?(\d+(?:\.\d+)?|\d+)\s*(usd|usdt|dollars?)?\b", low)
+        if m and ("$" in low or "usd" in low or "dollar" in low):
+            try: usd = float(m.group(1))
+            except Exception: pass
+        # interval in hours
+        if "week" in low: interval_h = 7*24
+        elif "month" in low: interval_h = 30*24
+        elif "friday" in low or "monday" in low or "tuesday" in low or "wednesday" in low:
+            interval_h = 24
+        elif "day" in low or "daily" in low or "each day" in low: interval_h = 24
+        else: interval_h = 24
+        coin_str = "BTC" if coin == "DEMO" else coin
+        reply = _bot(
+            f"I'll set up a recurring (DCA) plan: buy ${usd:.0f} of {coin_str} every "
+            f"{('week' if interval_h>=100 else 'day')}. This averages your cost over time. "
+            f"In the app, open Bots -> Recurring buys (DCA), enter {coin_str}, ${usd:.0f}, "
+            f"every {interval_h:.0f} hours, and press Start. Start in practice mode first.")
+        return {"intent": intent, "reply": reply,
+                "data": {"dca": {"coin": coin_str, "usd": usd, "interval_hours": interval_h}}}
 
     if intent == "chart":
         from ..ai.chart_reader import read_chart, explain_chart
