@@ -114,10 +114,57 @@ HTML = r"""<!doctype html>
     #emergencyBtn{font-size:17px;padding:14px;position:sticky;bottom:10px;z-index:45;box-shadow:0 6px 22px rgba(234,57,67,.5)}
   }
   @media(max-width:380px){ .metrics{grid-template-columns:1fr} }
+
+  /* ---- Sidebar layout ---- */
+  .app-shell{display:grid;grid-template-columns:220px 1fr;gap:22px;align-items:start}
+  .sidebar{position:sticky;top:74px;background:linear-gradient(180deg,var(--card),var(--panel));
+    border:1px solid var(--line);border-radius:var(--radius);padding:16px 12px;display:flex;flex-direction:column;gap:4px;
+    min-height:420px}
+  .side-brand{font-size:16px;font-weight:800;padding:6px 8px 14px;display:flex;align-items:center;gap:8px}
+  .logo-mark{width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--green),var(--green-d));font-size:15px}
+  .navlink{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:10px;color:var(--muted);
+    cursor:pointer;font-weight:600;font-size:14px;text-decoration:none}
+  .navlink:hover{background:var(--card2);color:var(--text)}
+  .navlink.active{background:rgba(22,199,132,.15);color:#8fe9c2}
+  .section{display:none} .section.show{display:block;animation:fade .18s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  @media(max-width:880px){
+    .app-shell{grid-template-columns:1fr;gap:0}
+    .sidebar{position:static;min-height:0;flex-direction:row;flex-wrap:wrap;gap:6px;padding:10px;margin-bottom:14px}
+    .side-brand{width:100%} .sidebar #themeBtn{margin-top:0;margin-left:auto;width:auto}
+  }
+
+  /* ---- Light theme ---- */
+  body.light{--bg:#eef2f8;--panel:#fff;--card:#fff;--card2:#f2f5fb;--elev:#e7ecf6;
+    --line:#dbe2ee;--line2:#c7d1e3;--chip:#f6f8fc;--text:#14203a;--muted:#5b6a86;
+    background:#eef2f8;text-shadow:none}
+  body.light header{background:rgba(255,255,255,.85);border-bottom-color:#dbe2ee}
+  body.light .modal{background:rgba(200,210,230,.7)}
+  body.light .modal .box{background:#fff}
+  body.light #candleChart,body.light #candleChartBig{background:#0b1220} /* keep chart dark */
+
+  /* expandable bot rows */
+  .botrow{cursor:pointer}
+  .botdetail{display:none} .botdetail.open{display:block}
 </style>
 </head>
 <body>
 <div class="wrap">
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="side-brand"><span class="logo-mark">&#x1F4C8;</span> <b>Super&nbsp;<span style="color:var(--green)">AI</span>&nbsp;Trader</b></div>
+    <nav>
+      <a class="navlink active" data-nav="trade" onclick="showNav('trade')">&#x1F4C8; Trade</a>
+      <a class="navlink" data-nav="bots" onclick="showNav('bots')">&#x1F916; Bots</a>
+      <a class="navlink" data-nav="ai" onclick="showNav('ai')">&#x1F9E0; AI</a>
+      <a class="navlink" data-nav="history" onclick="showNav('history')">&#x1F5C2;&#xFE0F; History</a>
+      <a class="navlink" data-nav="settings" onclick="showNav('settings')">&#x2699;&#xFE0F; Settings</a>
+    </nav>
+    <button class="btn btn-gray" id="themeBtn" style="margin-top:auto" onclick="toggleTheme()">&#x1F317; Dark</button>
+  </aside>
+  <main class="content">
+
 <div class="modal" id="aiModal">
   <div class="box">
     <h2 style="margin-top:0">&#x1F9E0; Choose your local AI</h2>
@@ -166,7 +213,7 @@ HTML = r"""<!doctype html>
   </div>
 
   <!-- TALK TO YOUR AI -->
-  <div class="card">
+  <div class="card section" data-section="ai">
     <h2>💬 Tell your AI what you want</h2>
     <p class="help">Just type like you're talking to a person. The AI thinks, the robot does the
       work, and the Safety Shield protects you. Try one of these:</p>
@@ -186,7 +233,7 @@ HTML = r"""<!doctype html>
   </div>
 
   <!-- QUICK START -->
-  <div class="card">
+  <div class="card section" data-section="trade">
     <h2>&#x1F680; Quick start (5 steps)</h2>
     <ol style="margin:6px 0;padding-left:22px;line-height:1.7">
       <li><b>Test connection</b> (&#x1F50C; on the Live Market card) &mdash; checks live data works.</li>
@@ -204,7 +251,7 @@ HTML = r"""<!doctype html>
   </div>
 
   <!-- FIRST-RUN SETUP -->
-  <div class="card" id="setupWizard" style="border-color:#ffc14d">
+  <div class="card section" data-section="trade" id="setupWizard" style="border-color:#ffc14d">
     <h2>&#x1F44B; First time here? 3 steps</h2>
     <p class="help">You are in safe PRACTICE mode. Tick these off as you go — this card hides itself when done.</p>
     <div id="wizardSteps" style="line-height:2">
@@ -216,7 +263,7 @@ HTML = r"""<!doctype html>
   </div>
 
   <!-- LIVE MARKET CHART -->
-  <div class="card">
+  <div class="card section" data-section="trade">
     <h2>📈 Live market</h2>
     <p class="help">Real Binance/Gate.io prices with EMA 7 / 25 / 99 (like your trading app).
       Shows practice data here if the live feed isn't connected.</p>
@@ -272,7 +319,7 @@ HTML = r"""<!doctype html>
   </div>
 
   <!-- STEP CARD -->
-  <div class="card" id="setupCard">
+  <div class="card section" data-section="bots" id="setupCard">
     <h2>1️⃣ Pick your coin</h2>
     <p class="help">Choose what the little robot trades. Don't know? Use <b>BTC</b> (Bitcoin).</p>
     <label>Coin</label>
@@ -361,7 +408,7 @@ HTML = r"""<!doctype html>
   </div>
 
   <!-- MULTI-COIN GRIDS -->
-  <div class="card">
+  <div class="card section" data-section="bots">
     <h2>&#x1F916; Multi-coin grids (practice money)</h2>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
       <button class="chip" onclick="setCoins('BTC,ETH,BNB')">Blue chips: BTC/ETH/BNB</button>
@@ -430,7 +477,7 @@ HTML = r"""<!doctype html>
   </div>
 
   <!-- LIVE TRADING PANEL -->
-  <div class="card">
+  <div class="card section" data-section="bots">
     <h2>📡 Live — watch the robot trade real prices</h2>
     <p class="help">Connects to the real exchange price (Binance / Gate.io). In <b>practice</b> mode it
       uses practice money and sends <b>no real orders</b> — but every number is live. Use Preview first
@@ -494,7 +541,7 @@ HTML = r"""<!doctype html>
   </div>
 
   <!-- RESULTS -->
-  <div class="card" id="resultCard" style="display:none">
+  <div class="card section" data-section="bots" id="resultCard" style="display:none">
     <h2>📊 What happened</h2>
     <p class="help">A practice run over recent price moves. Green = made pretend money.</p>
     <div class="big" id="headline"></div>
@@ -509,7 +556,7 @@ HTML = r"""<!doctype html>
   </div>
 
   <!-- LOCAL AI LIBRARY -->
-  <div class="card">
+  <div class="card section" data-section="ai">
     <h2>&#x1F9E0; Local AI brain</h2>
     <p class="help">The AI runs entirely on THIS computer &mdash; no cloud. Pick a small model.
       Need Ollama? Get it free at <span style="color:var(--accent)">https://ollama.com</span> then restart the app.</p>
@@ -550,7 +597,7 @@ HTML = r"""<!doctype html>
   </div>
 
   <!-- NOTIFICATIONS -->
-  <div class="card">
+  <div class="card section" data-section="settings">
     <h2>&#x1F4EC; Get alerts on your phone / email</h2>
     <p class="help">Optional. The AI emails/Telegrams you when it <b>pauses in a crash</b> or
       <b>locks profit</b>. Stored locally; email uses a Gmail <i>App Password</i> (not your login).</p>
@@ -583,7 +630,7 @@ HTML = r"""<!doctype html>
   </div>
 
   <!-- HISTORY -->
-  <div class="card">
+  <div class="card section" data-section="history">
     <h2>&#x1F5C2;&#xFE0F; History</h2>
     <p class="help">A private, on-your-computer record of runs (like "Historical Profits"). It
       survives restarts; nothing is sent anywhere.</p>
@@ -600,7 +647,7 @@ HTML = r"""<!doctype html>
   </div>
 
   <!-- SAFETY -->
-  <div class="card">
+  <div class="card section" data-section="settings">
     <h2>🛡️ How we keep you safe</h2>
     <p class="help">Every box here is built into the app.</p>
     <ul class="check" id="checklist" style="padding:0"></ul>
@@ -608,7 +655,7 @@ HTML = r"""<!doctype html>
   </div>
 
   <!-- CONNECT (hidden until live mode) -->
-  <div class="card" id="connectCard" style="display:none">
+  <div class="card section" data-section="settings" id="connectCard" style="display:none">
     <h2>🔗 Connect an exchange (optional)</h2>
     <p class="help">Only needed for real trading. <b>Create a TRADE-ONLY key on the exchange and
       turn WITHDRAWALS OFF.</b> Your key is encrypted on this computer and never shown again.</p>
@@ -651,6 +698,8 @@ HTML = r"""<!doctype html>
     </div>
   </div>
 
+  </main>
+</div>
   <footer>Educational software · not financial advice · runs on your own computer (127.0.0.1) · Super-AI-Trader</footer>
 </div>
 
@@ -1029,6 +1078,7 @@ loadChecklist();
 refreshPresets();
 loadMarket();
 autostartLoad().then(autostartApply);
+showNav('trade');
 const _savedLang=localStorage.getItem('lang')||'en'; loadLanguage(_savedLang).then(()=>{const ls=document.getElementById('langSel'); if(ls) ls.value=_savedLang;});
 loadHistory();
 loadAILibrary();
@@ -1308,7 +1358,7 @@ async function multiRefresh(){
       const t=f.ts?new Date(f.ts*1000).toLocaleTimeString():'';
       return `<div style="color:${col};font-size:13px">${t} ${f.side} ${f.amount} @ ${f.price}</div>`;
     }).join('') || '<div class="fine">no fills yet</div>';
-    return `<div style="padding:12px;margin:8px 0;border-radius:12px;background:var(--card2);border:1px solid var(--line)">
+    return `<div class='botrow' style="padding:12px;margin:8px 0;border-radius:12px;background:var(--card2);border:1px solid var(--line)">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <b style="font-size:18px">${c.coin}</b>
         <span class="fine">price</span> <b>${c.price}</b>
@@ -1323,7 +1373,10 @@ async function multiRefresh(){
         <div style="flex:2;min-width:220px"><div class="fine">Equity</div>${spark}</div>
         <div style="flex:1;min-width:180px"><div class="fine">Recent fills (live)</div>${fills}</div>
       </div>
-      <div class="fine" style="margin-top:6px">${(c.events||[]).slice(-2).map(e=>e.text).join(' · ')}</div>
+      <div class="fine" style="margin-top:6px"><b>&#x25B8; details</b> — ${(c.events||[]).slice(-2).map(e=>e.text).join(' · ')||'no alerts'}</div>
+        <div class='botdetail' style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">
+          ${(c.events||[]).slice().reverse().map(e=>`<div class='fine'>${new Date((e.ts||0)*1000).toLocaleTimeString()} · ${e.text}</div>`).join('')}
+        </div>
     </div>`;
   }).join('') || '<div class="fine">No grids running. Press Start.</div>';
   // global alert toasts
@@ -1764,6 +1817,31 @@ function applyLanguage(){
   if(es && tr('emergency')) es.innerHTML='&#x1F6D1; '+tr('emergency');
 }
 function _currentLang(){ return document.getElementById('langSel')?document.getElementById('langSel').value:'en'; }
+
+function showNav(name){
+  document.querySelectorAll('.navlink').forEach(a=>a.classList.toggle('active',a.dataset.nav===name));
+  document.querySelectorAll('.section').forEach(el=>{
+    el.classList.toggle('show', el.dataset.section===name);
+  });
+  if(name==='history' && typeof loadHistory==='function') loadHistory();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function toggleTheme(){
+  document.body.classList.toggle('light');
+  const light=document.body.classList.contains('light');
+  localStorage.setItem('theme', light?'light':'dark');
+  const b=document.getElementById('themeBtn'); if(b) b.innerHTML=light? '&#x2600;&#xFE0F; Light':'&#x1F317; Dark';
+}
+(function initTheme(){
+  if(localStorage.getItem('theme')==='light') document.body.classList.add('light');
+})();
+// expand/collapse bot detail
+document.addEventListener('click',(e)=>{
+  const row=e.target.closest('.botrow');
+  if(!row) return;
+  const d=row.querySelector('.botdetail');
+  if(d) d.classList.toggle('open');
+});
 </script>
 </body>
 </html>
