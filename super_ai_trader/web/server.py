@@ -178,6 +178,30 @@ def _dca_tick() -> None:
                 pass
 
 
+def _watcher() -> dict:
+    """24/7 watcher: run over any live multi-grid sessions and rank
+    best buy / sell moments across watched coins (paper; no orders)."""
+    from ..exchange.multibot import get_manager
+    from ..watcher import run_watch
+    ex = "binance"
+    mgr = get_manager(ex)
+    summ = mgr.summary()
+    coins = summ.get("coins") or []
+    obs = []
+    for coin in mgr.sessions:
+        sess = mgr.sessions.get(coin)
+        if sess is None:
+            continue
+        try:
+            price = sess.conn.price(sess.cfg.symbol)
+        except Exception:
+            continue
+        st = sess.status()
+        obs.append({"coin": coin, "price": price, "cfg": sess.cfg,
+                    "regime": st.get("regime"), "trail": st.get("trail")})
+    return run_watch(obs)
+
+
 def _briefing(payload: dict) -> dict:
     from ..exchange.multibot import get_manager
     from ..briefing import build_briefing
@@ -1165,6 +1189,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_dca_start(payload))
         elif u.path == "/api/dca/stop":
             self._send(_dca_stop(payload))
+        elif u.path == "/api/watcher":
+            self._send(_watcher())
         elif u.path == "/api/briefing":
             self._send(_briefing(payload))
         elif u.path == "/api/multigrid/drawdown":

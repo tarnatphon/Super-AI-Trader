@@ -413,6 +413,7 @@ HTML = r"""<!doctype html>
     <div id="briefHeadline" style="font-size:18px;font-weight:800;margin-bottom:8px">&#8230;</div>
     <div id="briefLines" class="fine" style="font-size:14px;color:var(--text);line-height:1.7"></div>
     <div id="briefAlerts"></div>
+    <div id="watchSummary" style="margin-top:10px"></div>
   </div>
 
   <!-- MULTI-COIN GRIDS -->
@@ -1119,6 +1120,7 @@ loadMarket();
 autostartLoad().then(autostartApply);
 showNav('trade');
 loadBriefing();
+loadWatcher();
 const _savedLang=localStorage.getItem('lang')||'en'; loadLanguage(_savedLang).then(()=>{const ls=document.getElementById('langSel'); if(ls) ls.value=_savedLang;});
 loadHistory();
 loadAILibrary();
@@ -1940,6 +1942,23 @@ async function loadBriefing(){
   }catch(e){}
 }
 setInterval(loadBriefing, 15000);
+
+async function loadWatcher(){
+  try{
+    const r=await apiGet('/api/watcher');
+    const box=document.getElementById('watchSummary'); if(!box) return;
+    const color={BEST_BUY:'var(--green)',BEST_SELL:'var(--red)',BANK:'var(--green)',PAUSE:'#ffd54a',GRID:'var(--muted)'};
+    let html='<div class="fine" style="margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">👁️ 24/7 watcher — best moments now</div>';
+    (r.summary||[]).forEach(l=>{ html+=`<div style="margin:4px 0;font-weight:600">${l}</div>`; });
+    html+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">';
+    (r.ranked||[]).slice(0,8).forEach(v=>{
+      html+=`<span class="chip" style="border-color:${color[v.state]}33;color:${color[v.state]}">${v.coin} · ${v.state.replace(/_/g,' ')} · ${v.score}/100</span>`;
+    });
+    html+='</div>';
+    box.innerHTML=html;
+  }catch(e){}
+}
+setInterval(loadWatcher, 20000);
 </script>
 </body>
 </html>
