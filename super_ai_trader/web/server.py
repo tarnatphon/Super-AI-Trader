@@ -178,6 +178,14 @@ def _dca_tick() -> None:
                 pass
 
 
+def _briefing(payload: dict) -> dict:
+    from ..exchange.multibot import get_manager
+    from ..briefing import build_briefing
+    ex = payload.get("exchange", "binance")
+    summ = get_manager(ex).summary()
+    return build_briefing(summ)
+
+
 def _multigrid_drawdown() -> dict:
     from ..exchange.multibot import get_manager
     return get_manager().check_drawdown()
@@ -1142,6 +1150,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_dca_start(payload))
         elif u.path == "/api/dca/stop":
             self._send(_dca_stop(payload))
+        elif u.path == "/api/briefing":
+            self._send(_briefing(payload))
         elif u.path == "/api/multigrid/drawdown":
             self._send(_multigrid_drawdown())
         elif u.path == "/api/multigrid/start":

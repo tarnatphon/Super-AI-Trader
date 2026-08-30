@@ -407,6 +407,14 @@ HTML = r"""<!doctype html>
     <div class="fine" id="b_info"></div>
   </div>
 
+  <!-- AI DAILY BRIEFING -->
+  <div class="card section" data-section="trade" style="border-color:var(--green)">
+    <h2>&#x1F4E3; AI briefing</h2>
+    <div id="briefHeadline" style="font-size:18px;font-weight:800;margin-bottom:8px">&#8230;</div>
+    <div id="briefLines" class="fine" style="font-size:14px;color:var(--text);line-height:1.7"></div>
+    <div id="briefAlerts"></div>
+  </div>
+
   <!-- MULTI-COIN GRIDS -->
   <div class="card section" data-section="bots">
     <h2>&#x1F916; Multi-coin grids (practice money)</h2>
@@ -1099,6 +1107,7 @@ refreshPresets();
 loadMarket();
 autostartLoad().then(autostartApply);
 showNav('trade');
+loadBriefing();
 const _savedLang=localStorage.getItem('lang')||'en'; loadLanguage(_savedLang).then(()=>{const ls=document.getElementById('langSel'); if(ls) ls.value=_savedLang;});
 loadHistory();
 loadAILibrary();
@@ -1354,7 +1363,7 @@ async function multiStart(){
   msg.innerHTML = r.ok ? ('&#x2705; Started '+ok+' grid(s) '+
       (bad.length?('<br>failed: '+bad.map(b=>b.coin+' ('+b.error.slice(0,40)+')').join(', ')):''))
     : ('&#x26A0;&#xFE0F; Could not start grids. Install ccxt and check internet, then Test connection.');
-  if(r.ok){ multiRefresh(); multiSummary(); localStorage.setItem('wiz_demo','1'); localStorage.setItem('wiz_grid','1'); refreshWizard(); }
+  if(r.ok){ multiRefresh(); multiSummary(); loadBriefing(); localStorage.setItem('wiz_demo','1'); localStorage.setItem('wiz_grid','1'); refreshWizard(); }
 }
 async function multiStop(){
   const msg=document.getElementById('mg_msg');
@@ -1886,6 +1895,22 @@ async function dcaRefresh(){
 }
 async function dcaStop(coin){ await post('/api/dca/stop',{coin:coin||'all'}); dcaRefresh(); }
 setInterval(()=>{ try{ if(document.getElementById('dca_rows')) dcaRefresh(); }catch(e){} }, 12000);
+
+async function loadBriefing(){
+  try{
+    const r=await post('/api/briefing',{exchange:mgEx()});
+    const h=document.getElementById('briefHeadline');
+    if(!h) return;
+    const pos=(r.total_pnl||0)>=0?'up':'down';
+    h.innerHTML=`<span class="${pos==='up'?'up':'down'}">${r.headline||''}</span>`;
+    document.getElementById('briefLines').innerHTML =
+      (r.lines||[]).map(l=>`<div>• ${l}</div>`).join('');
+    const a=document.getElementById('briefAlerts');
+    if(a) a.innerHTML=(r.alerts||[]).map(x=>
+      `<div style="color:#f5d479;margin-top:8px">&#x26A0;&#xFE0F; ${x}</div>`).join('');
+  }catch(e){}
+}
+setInterval(loadBriefing, 15000);
 </script>
 </body>
 </html>
