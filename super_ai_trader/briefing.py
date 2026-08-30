@@ -41,6 +41,8 @@ def build_briefing(multigrid: dict | None = None) -> dict:
     active = multigrid.get("active_coins", []) or []
     rt = multigrid.get("total_round_trips", 0) or 0
 
+    lines.append("Golden rule: BUY LOW, SELL HIGH — the grid staggers buys below "
+                 "price and sells above; it pauses buying in crashes and trails winners to bank profit.")
     lines.append(
         f"Your {count} grid(s) are {_word(total_pnl)} overall, "
         f"with a total P/L of {total_pnl:+.2f} across {rt} completed buy→sell cycles."
@@ -50,7 +52,10 @@ def build_briefing(multigrid: dict | None = None) -> dict:
     for c in coins:
         coin = c.get("coin", "")
         roi = c.get("roi_pct", 0.0) or 0.0
-        if c.get("paused"):
+        inst = c.get("instruction")
+        if inst and inst.get("headline"):
+            lines.append(f"• {coin} [{inst.get('action')}]: {inst.get('headline')}")
+        elif c.get("paused"):
             lines.append(f"• {coin}: grid paused — strong trend detected, the AI stopped buying to protect you.")
         else:
             note = (c.get("status_note") or {}).get("label", "running")

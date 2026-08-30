@@ -656,3 +656,14 @@ def test_dca_plan():
     snap = p.snapshot(60000)
     assert snap["total_spent"] == 200
     assert snap["base_acquired"] > 0
+
+def test_grid_instructions_follow_buy_low_sell_high():
+    from super_ai_trader.grid.engine import GridConfig
+    from super_ai_trader.grid.instructions import grid_instruction, rule_reminder
+    cfg = GridConfig(symbol="X/USDT", lower=90, upper=110, grids=20,
+                     mode="geometric", investment=1000, fee_pct=.1)
+    assert grid_instruction(88, cfg)["action"] == "BUY"          # below range -> buy low
+    assert grid_instruction(112, cfg)["action"] == "SELL"        # above range -> sell high
+    assert grid_instruction(80, cfg, regime={"active": False, "status": "strong_down"})["action"] == "HOLD"
+    assert grid_instruction(108, cfg, trail={"state": "locked"})["action"] == "BANK_PROFIT"
+    assert "BUY LOW" in rule_reminder()

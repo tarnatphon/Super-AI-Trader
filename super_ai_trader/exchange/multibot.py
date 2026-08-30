@@ -156,9 +156,19 @@ class MultiGrid:
                 curve = [round(v, 2) for v in (st.get("profit_curve") or []) if v is not None]
                 fills = st.get("recent_fills") or []
                 pnl = float(st.get("pnl") or 0.0)
+                # Live AI instruction for this bot (buy-low / sell-high rule)
+                try:
+                    from ..grid.instructions import grid_instruction
+                    inst = grid_instruction(float(st.get("price") or 0),
+                                             sess.cfg,
+                                             regime=st.get("regime"),
+                                             trail=st.get("trail"))
+                except Exception:
+                    inst = None
                 rows.append({
                     "coin": coin,
                     "price": st.get("price"),
+                    "instruction": inst,
                     "roi_pct": st.get("roi_pct"),
                     "pnl": round(pnl, 2),
                     "buys": st.get("matched_buys"),

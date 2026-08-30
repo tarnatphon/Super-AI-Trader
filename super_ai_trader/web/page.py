@@ -1409,6 +1409,10 @@ async function multiRefresh(){
           <span>${reg}${note}</span>
         </div>
       </div>
+      ${c.instruction?`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:${c.instruction.tone==='amber'?'rgba(240,185,11,.1)':c.instruction.tone==='green'?'rgba(22,199,132,.09)':'#0e1626'};border:1px solid ${c.instruction.tone==='amber'?'rgba(240,185,11,.3)':'rgba(22,199,132,.25)'}">
+        <b>&#x1F916; AI instruction [${c.instruction.action}]</b> &mdash; ${c.instruction.headline}
+        ${c.instruction.next_buy?`<div class="fine">&#x1F4B9; next BUY LOW ~ <span class="up">${c.instruction.next_buy}</span> &middot; next SELL HIGH ~ <span style="color:var(--red)">${c.instruction.next_sell}</span></div>`:''}
+      </div>`:''}
       <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
         <div style="flex:2;min-width:220px"><div class="fine">Equity</div>${spark}</div>
         <div style="flex:1;min-width:180px"><div class="fine">Recent fills (live)</div>${fills}</div>
