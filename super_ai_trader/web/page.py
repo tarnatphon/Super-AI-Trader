@@ -1782,7 +1782,21 @@ function renderCandles(elId, m, big){
   if(m.ema99) ema(m.ema99,'#b48cff',1.4);
   // last price line
   if(m.last){ const y=Y(m.last);
-    h+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#7fd3ff" stroke-width="1" stroke-dasharray="4 3"/>`; }
+    h+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#7fd3ff" stroke-width="1" stroke-dasharray="4 3"/>`;
+    // price label
+    h+=`<rect x="${W-padR+2}" y="${y-9}" width="${padR-4}" height="18" rx="3" fill="#7fd3ff" opacity="0.18"/>`;
+  }
+  // AI next BUY-LOW / SELL-HIGH markers
+  if(m.next_buy!=null){ const y=Y(m.next_buy);
+    h+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#29c484" stroke-width="1.6" stroke-dasharray="8 4"/>`;
+    h+=`<polygon points="${W-padR-16},${y-6} ${W-padR-4},${y} ${W-padR-16},${y+6}" fill="#29c484"/>`;
+    h+=`<text x="${padL+6}" y="${y-6}" fill="#8fe9c2" font-size="12" font-weight="700">BUY LOW ${m.next_buy}</text>`;
+  }
+  if(m.next_sell!=null){ const y=Y(m.next_sell);
+    h+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#ff6b6b" stroke-width="1.6" stroke-dasharray="8 4"/>`;
+    h+=`<polygon points="${W-padR-16},${y-6} ${W-padR-4},${y} ${W-padR-16},${y+6}" fill="#ff6b6b"/>`;
+    h+=`<text x="${padL+6}" y="${y+14}" fill="#ff9b9b" font-size="12" font-weight="700">SELL HIGH ${m.next_sell}</text>`;
+  }
   svg.innerHTML=h;
 }
 let _chartData=null;

@@ -598,8 +598,23 @@ def _candles(payload: dict) -> dict:
         while lvl_sell.__len__() < 12 and p <= last * (1 + rp/100):
             lvl_sell.append(round(p, 6)); p += step_gap
         grid = {"buy_levels": lvl_buy, "sell_levels": lvl_sell}
+    # AI next buy-low / sell-high for the current range
+    next_buy = next_sell = None
+    action = None
+    try:
+        from ..grid.instructions import grid_instruction
+        rng = float(payload.get("range_pct", 12))
+        last = c[-1]
+        cfg = type("C", (), {"lower": last*(1-rng/100), "upper": last*(1+rng/100),
+                              "grids": 25})()
+        inst = grid_instruction(last, cfg)
+        next_buy = inst.get("next_buy"); next_sell = inst.get("next_sell")
+        action = inst.get("action")
+    except Exception:
+        pass
     return {"symbol": f"{ticker}/USDT", "timeframe": timeframe,
             "source": source, "candles": out,
+            "next_buy": next_buy, "next_sell": next_sell, "action": action,
             "ema7": [round(x,6) if x else None for x in ema7[-len(out):]],
             "ema25": [round(x,6) if x else None for x in ema25[-len(out):]],
             "ema99": [round(x,6) if x else None for x in ema99[-len(out):]],
