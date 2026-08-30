@@ -178,6 +178,38 @@ def _dca_tick() -> None:
                 pass
 
 
+_MORNING_STATE = {"last_sent_day": None}
+
+
+def _morning_check_and_send(force: bool = False) -> dict:
+    """Send the morning brief once per local day if enabled in config and
+    any notification channel is configured."""
+    from .. import config
+    import datetime as _dt
+    today = _dt.date.today().isoformat()
+    if not force and _MORNING_STATE["last_sent_day"] == today:
+        return {"sent": False, "reason": "already sent today", "day": today}
+    if not force and not config.get("morning_brief_enabled", False):
+        return {"sent": False, "reason": "morning brief not enabled", "day": today}
+    res = _morning_brief({})
+    if res.get("sent") or force:
+        _MORNING_STATE["last_sent_day"] = today
+    return res
+
+
+def _morning_status() -> dict:
+    from .. import config
+    return {"enabled": bool(config.get("morning_brief_enabled", False))}
+
+
+def _morning_enable(payload: dict) -> dict:
+    from .. import config
+    config.save({"morning_brief_enabled": bool(payload.get("enabled", True))})
+    return {"ok": True,
+            "enabled": bool(config.get("morning_brief_enabled", False)),
+            "note": "Sends each day to email/Telegram when a channel is configured."}
+
+
 def _morning_brief(payload: dict) -> dict:
     """Compose the daily watcher/briefing and push it to email/Telegram if
     configured. Also returns the text so the UI can show it."""
@@ -1213,6 +1245,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_dca_stop(payload))
         elif u.path == "/api/morning-brief":
             self._send(_morning_brief(payload))
+        elif u.path == "/api/morning/enable":
+            self._send(_morning_enable(payload))
+        elif u.path == "/api/morning/status":
+            self._send(_morning_status())
+        elif u.path == "/api/morning/tick":
+            self._send(_morning_check_and_send(False))
         elif u.path == "/api/watcher":
             self._send(_watcher())
         elif u.path == "/api/briefing":

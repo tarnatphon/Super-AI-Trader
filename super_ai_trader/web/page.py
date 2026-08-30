@@ -414,6 +414,10 @@ HTML = r"""<!doctype html>
     <div id="briefAlerts"></div>
     <div id="watchSummary" style="margin-top:10px"></div>
     <button class="btn btn-gray" style="width:auto;margin-top:10px" onclick="sendMorningBrief()">🌅 Email/message me this briefing</button>
+    <label style="display:flex;gap:9px;align-items:center;margin-top:8px;color:var(--muted);font-weight:600">
+      <input type="checkbox" id="morningAuto" style="width:auto" onchange="toggleMorningAuto()"> Auto-send this briefing once every morning (to email/Telegram)
+    </label>
+    <div id="morningStatus" class="fine"></div>
   </div>
 
   <!-- MULTI-COIN GRIDS -->
@@ -1121,6 +1125,7 @@ autostartLoad().then(autostartApply);
 showNav('trade');
 loadBriefing();
 loadWatcher();
+(async()=>{try{const r=await post('/api/morning/status',{});const cb=document.getElementById('morningAuto');if(cb)cb.checked=!!r.enabled;}catch(e){}})();
 const _savedLang=localStorage.getItem('lang')||'en'; loadLanguage(_savedLang).then(()=>{const ls=document.getElementById('langSel'); if(ls) ls.value=_savedLang;});
 loadHistory();
 loadAILibrary();
@@ -1966,6 +1971,19 @@ async function sendMorningBrief(){
   if(btn){btn.disabled=false;btn.innerHTML='🌅 Email/message me this briefing';}
   toast(r.sent?'Morning briefing sent ✅':'Set up email/Telegram in Settings to receive it','green');
 }
+
+async function toggleMorningAuto(){
+  const on=document.getElementById('morningAuto').checked;
+  const r=await post('/api/morning/enable',{enabled:on});
+  const el=document.getElementById('morningStatus');
+  if(el){ el.style.color='#9af0cd';
+    el.textContent= on ? '✅ Morning brief will auto-send once a day (needs email/Telegram set up).'
+                       : 'Auto morning brief off.'; }
+}
+async function morningTick(){
+  try{ await post('/api/morning/tick',{}); }catch(e){}
+}
+setInterval(morningTick, 60*60*1000);  // check hourly; server gates once/day
 </script>
 </body>
 </html>
