@@ -107,6 +107,77 @@ def _multigrid_status(exchange: str = "binance") -> dict:
     return get_manager(exchange).overview()
 
 
+_DCA: dict = {}   # coin -> DCAPlan
+
+
+def _dca_start(payload: dict) -> dict:
+    from ..dca import DCAPlan
+    from ..exchange.connector import ExchangeConnector
+    from ..grid.engine import GridConfig  # noqa
+    coins = payload.get("coins") or ["BTC"]
+    if isinstance(coins, str):
+        coins = [c.strip() for c in coins.split(",") if c.strip()]
+    ex = payload.get("exchange", "binance")
+    usd = float(payload.get("usd", 25))
+    try:
+        interval = float(payload.get("interval_hours", 24)) * 3600
+    except Exception:
+        interval = 24 * 3600
+    max_buys = int(payload.get("max_buys", 0) or 0)
+    started = []
+    for coin in coins:
+        sym = f"{coin}/USDT"
+        try:
+            price = ExchangeConnector(ex, paper=True).price(sym)
+        except Exception:
+            started.append({"coin": coin, "ok": False, "error": "no live data"}); continue
+        plan = DCAPlan(symbol=sym, coin=coin, usd_amount=usd,
+                       interval_seconds=interval, max_buys=max_buys)
+        first = plan.execute_buy(price)   # immediate first buy
+        _DCA[coin] = plan
+        started.append({"coin": coin, "ok": True, "first_buy": first,
+                        "average": plan.average_entry()})
+    return {"ok": True, "exchange": ex, "started": started}
+
+
+def _dca_status() -> dict:
+    from ..exchange.connector import ExchangeConnector
+    rows = []
+    ex = "binance"
+    for coin, plan in _DCA.items():
+        try:
+            price = ExchangeConnector(ex, paper=True).price(plan.symbol)
+        except Exception:
+            price = plan.average_entry()
+        rows.append(plan.snapshot(price))
+    return {"count": len(rows), "plans": rows}
+
+
+def _dca_stop(payload: dict) -> dict:
+    coin = payload.get("coin")
+    if coin == "all" or not coin:
+        for p in _DCA.values():
+            p.running = False
+        stopped = list(_DCA.keys())
+    else:
+        if coin in _DCA:
+            _DCA[coin].running = False
+        stopped = [coin]
+    return {"stopped": stopped}
+
+
+def _dca_tick() -> None:
+    """Called periodically to execute due buys at live price."""
+    from ..exchange.connector import ExchangeConnector
+    for coin, plan in list(_DCA.items()):
+        if plan.due():
+            try:
+                price = ExchangeConnector("binance", paper=True).price(plan.symbol)
+                plan.execute_buy(price)
+            except Exception:
+                pass
+
+
 def _multigrid_drawdown() -> dict:
     from ..exchange.multibot import get_manager
     return get_manager().check_drawdown()
@@ -1013,6 +1084,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_multigrid_status(ex))
         elif u.path == "/api/livegrid/status":
             self._send(_live_grid_status())
+        elif u.path == "/api/dca/status":
+            self._send(_dca_status())
         elif u.path == "/api/multigrid/summary":
             q = parse_qs(urlparse(u.path).query)
             ex = (q.get("exchange") or ["binance"])[0]
@@ -1065,6 +1138,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_ai_install(payload))
         elif u.path == "/api/restart":
             self._send(_safe_stop_then_restart())
+        elif u.path == "/api/dca/start":
+            self._send(_dca_start(payload))
+        elif u.path == "/api/dca/stop":
+            self._send(_dca_stop(payload))
         elif u.path == "/api/multigrid/drawdown":
             self._send(_multigrid_drawdown())
         elif u.path == "/api/multigrid/start":

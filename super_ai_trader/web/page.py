@@ -476,6 +476,26 @@ HTML = r"""<!doctype html>
     <div id="mg_events" style="margin-top:10px"></div>
   </div>
 
+  <!-- DCA RECURRING BUYS -->
+  <div class="card section" data-section="bots">
+    <h2>&#x1F4B0; Recurring buys (DCA) &mdash; practice money</h2>
+    <p class="help">Buy a fixed amount on a schedule (e.g. $25 of BTC every day). The most popular beginner/passive strategy &mdash; it averages your cost over time.</p>
+    <div class="row">
+      <div><label>Coins</label><input id="dca_coins" value="BTC,ETH"></div>
+      <div><label>Buy each (USDT)</label><input id="dca_usd" type="number" value="25"></div>
+    </div>
+    <div class="row">
+      <div><label>Every (hours) &mdash; use small value for demo</label><input id="dca_interval" type="number" value="24"></div>
+      <div><label>Max buys (0 = until stopped)</label><input id="dca_max" type="number" value="0"></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn" style="width:auto" onclick="dcaStart()">&#x25B6;&#xFE0F; Start recurring buys</button>
+      <button class="btn btn-gray" style="width:auto" onclick="dcaStop('all')">Stop all</button>
+      <button class="btn btn-gray" style="width:auto" onclick="dcaRefresh()">Refresh</button>
+    </div>
+    <div id="dca_rows" class="fine" style="margin-top:10px"></div>
+  </div>
+
   <!-- LIVE TRADING PANEL -->
   <div class="card section" data-section="bots">
     <h2>📡 Live — watch the robot trade real prices</h2>
@@ -1842,6 +1862,30 @@ document.addEventListener('click',(e)=>{
   const d=row.querySelector('.botdetail');
   if(d) d.classList.toggle('open');
 });
+
+async function dcaStart(){
+  const r=await post('/api/dca/start',{
+    coins:document.getElementById('dca_coins').value,
+    usd:parseFloat(document.getElementById('dca_usd').value||25),
+    interval_hours:parseFloat(document.getElementById('dca_interval').value||24),
+    max_buys:parseInt(document.getElementById('dca_max').value||0)});
+  toast('DCA started for '+(r.started||[]).filter(x=>x.ok).length+' coin(s)','green');
+  dcaRefresh();
+}
+async function dcaRefresh(){
+  let r; try{ r=await apiGet('/api/dca/status'); }catch(e){ return; }
+  const rows=(r.plans||[]).map(p=>{
+    const pnl=p.pnl||0;
+    return `<div style="padding:10px 12px;margin:6px 0;border-radius:10px;background:var(--card2);border:1px solid var(--line)">
+      <b>${p.coin}</b> &nbsp; ${p.buys_done} buys &nbsp; spent ${p.total_spent} &nbsp; held ${p.base_acquired}
+      <span class="${pnl>=0?'up':'down'}" style="float:right">${pnl>=0?'+':''}${pnl}</span>
+      <div class="fine">avg entry ${p.avg_entry} · current value ${p.current_value} · ${p.running?'running':'stopped'}
+        <a class="tab" onclick="dcaStop('${p.coin}')">stop</a></div></div>`;
+  }).join('') || '<div class="fine">No recurring buys yet.</div>';
+  const el=document.getElementById('dca_rows'); if(el) el.innerHTML=rows;
+}
+async function dcaStop(coin){ await post('/api/dca/stop',{coin:coin||'all'}); dcaRefresh(); }
+setInterval(()=>{ try{ if(document.getElementById('dca_rows')) dcaRefresh(); }catch(e){} }, 12000);
 </script>
 </body>
 </html>

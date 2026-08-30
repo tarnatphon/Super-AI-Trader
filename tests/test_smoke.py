@@ -642,3 +642,17 @@ def test_live_grid_guard_blocked_until_armed():
         assert False
     except LiveNotArmed:
         pass
+
+def test_dca_plan():
+    from super_ai_trader.dca import DCAPlan
+    p = DCAPlan(symbol="BTC/USDT", coin="BTC", usd_amount=100,
+                interval_seconds=10, max_buys=2)
+    assert p.due(1000)
+    p.execute_buy(50000, 1000)
+    assert not p.due(1001)
+    assert p.due(1011)
+    p.execute_buy(60000, 1011)
+    assert p.buys_done == 2 and not p.running
+    snap = p.snapshot(60000)
+    assert snap["total_spent"] == 200
+    assert snap["base_acquired"] > 0
