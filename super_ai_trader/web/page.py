@@ -420,6 +420,36 @@ HTML = r"""<!doctype html>
     <div id="morningStatus" class="fine"></div>
   </div>
 
+  <!-- PORTFOLIO DASHBOARD -->
+  <div class="card section" data-section="trade" id="portfolioCard">
+    <h2>&#x1F4BC; Portfolio dashboard</h2>
+    <p class="help">Total value of all your paper grids — cash + holdings. Like a real portfolio dashboard.</p>
+    <div class="metrics" id="pfTiles" style="grid-template-columns:repeat(3,1fr)">
+      <div class="metric"><div class="k">Total value</div><div class="v" id="pf_total">–</div></div>
+      <div class="metric"><div class="k">P &amp; L (all)</div><div class="v" id="pf_pnl">–</div></div>
+      <div class="metric"><div class="k">Cash (unallocated)</div><div class="v" id="pf_cash">–</div></div>
+    </div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;align-items:flex-start">
+      <div>
+        <div class="fine" style="margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Asset allocation</div>
+        <svg id="pfDonut" viewBox="0 0 200 200" style="width:200px;height:200px;margin:0;background:transparent;border:none"></svg>
+      </div>
+      <div style="flex:2;min-width:240px">
+        <div style="display:flex;gap:18px;flex-wrap:wrap">
+          <div style="flex:1;min-width:150px">
+            <div class="fine" style="text-transform:uppercase;letter-spacing:.5px">&#x1F7E2; Top winners</div>
+            <div id="pf_winners" class="fine" style="color:var(--text)"></div>
+          </div>
+          <div style="flex:1;min-width:150px">
+            <div class="fine" style="text-transform:uppercase;letter-spacing:.5px">&#x1F534; Biggest losers</div>
+            <div id="pf_losers" class="fine" style="color:var(--text)"></div>
+          </div>
+        </div>
+        <div id="pf_holdings" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- MULTI-COIN GRIDS -->
   <div class="card section" data-section="bots">
     <h2>&#x1F916; Multi-coin grids (practice money)</h2>
@@ -1125,6 +1155,7 @@ autostartLoad().then(autostartApply);
 showNav('trade');
 loadBriefing();
 loadWatcher();
+loadPortfolio();
 (async()=>{try{const r=await post('/api/morning/status',{});const cb=document.getElementById('morningAuto');if(cb)cb.checked=!!r.enabled;}catch(e){}})();
 const _savedLang=localStorage.getItem('lang')||'en'; loadLanguage(_savedLang).then(()=>{const ls=document.getElementById('langSel'); if(ls) ls.value=_savedLang;});
 loadHistory();
@@ -1984,6 +2015,47 @@ async function morningTick(){
   try{ await post('/api/morning/tick',{}); }catch(e){}
 }
 setInterval(morningTick, 60*60*1000);  // check hourly; server gates once/day
+
+function donutSvg(items){
+  const svg=document.getElementById('pfDonut'); if(!svg||!items.length) return;
+  const R=70,cx=100,cy=100; let start=-Math.PI/2; let h='';
+  const total=items.reduce((a,i)=>a+i.value,0)||1;
+  items.forEach((it,i)=>{
+    const frac=it.value/total; const ang=frac*2*Math.PI;
+    const x1=cx+R*Math.cos(start), y1=cy+R*Math.sin(start);
+    const x2=cx+R*Math.cos(start+ang), y2=cy+R*Math.sin(start+ang);
+    const large=ang>Math.PI?1:0;
+    h+=`<path d="M ${cx} ${cy} L ${x1.toFixed(1)} ${y1.toFixed(1)} A ${R} ${R} 0 ${large} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z" fill="${it.color||'#666'}" opacity="0.9"/>`;
+    // label at mid
+    const mid=start+ang/2; const lx=cx+(R*0.62)*Math.cos(mid), ly=cy+(R*0.62)*Math.sin(mid);
+    if(frac>0.05) h+=`<text x="${lx}" y="${ly}" fill="#fff" font-size="9" text-anchor="middle">${it.label}</text>`;
+    start+=ang;
+  });
+  h+=`<circle cx="${cx}" cy="${cy}" r="34" fill="#0b1220"/>`;
+  h+=`<text x="${cx}" y="${cy-2}" fill="#9fb0c7" font-size="9" text-anchor="middle">${items.length}</text>`;
+  h+=`<text x="${cx}" y="${cy+10}" fill="#eaf0fa" font-size="10" font-weight="700" text-anchor="middle">assets</text>`;
+  svg.innerHTML=h;
+}
+async function loadPortfolio(){
+  let r; try{ r=await apiGet('/api/portfolio?exchange='+mgEx()); }catch(e){ return; }
+  if(!r) return;
+  const set=(id,txt)=>{const el=document.getElementById(id); if(el) el.innerHTML=txt;};
+  const pnl=r.total_pnl||0;
+  set('pf_total','<b>'+fmt(r.total_value)+'</b>');
+  set('pf_pnl','<span class="'+(pnl>=0?'up':'down')+'">'+(pnl>=0?'+':'')+fmt(pnl)+' ('+r.total_pnl_pct+'%)</span>');
+  set('pf_cash','<b>'+fmt(r.cash)+'</b>');
+  set('pf_winners',(r.winners||[]).map(w=>`<div>${w.coin}: <span class="up">+${w.roi_pct}%</span></div>`).join('')||'<span class=fine>none yet</span>');
+  set('pf_losers',(r.losers||[]).map(w=>`<div>${w.coin}: <span class="down">${w.roi_pct}%</span></div>`).join('')||'<span class=fine>none yet</span>');
+  const rows=(r.holdings||[]).filter(h=>h.amount>0||h.cash>0).map(h=>
+    `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)">
+      <span>${h.coin} ${h.paused?'<span style="color:#ffd54a">⏸</span>':''}</span>
+      <span class="fine">held ${h.amount} &asymp; <b>${fmt(h.value)}</b> &middot; <span class="${h.roi_pct>=0?'up':'down'}">${h.roi_pct>=0?'+':''}${h.roi_pct}%</span></span>
+    </div>`).join('')||'<div class="fine">No holdings — start grids to build your portfolio.</div>';
+  set('pf_holdings', rows);
+  donutSvg(r.allocation||[]);
+}
+setInterval(loadPortfolio, 20000);
+
 </script>
 </body>
 </html>

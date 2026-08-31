@@ -667,3 +667,18 @@ def test_grid_instructions_follow_buy_low_sell_high():
     assert grid_instruction(80, cfg, regime={"active": False, "status": "strong_down"})["action"] == "HOLD"
     assert grid_instruction(108, cfg, trail={"state": "locked"})["action"] == "BANK_PROFIT"
     assert "BUY LOW" in rule_reminder()
+
+def test_portfolio_aggregation():
+    from super_ai_trader.portfolio import build_portfolio
+    mg = {"coins": [
+        {"coin": "BTC", "price": 70000, "base_held": 0.5, "cash": 30000,
+         "invested": 50000, "pnl": 5000, "roi_pct": 10},
+        {"coin": "ETH", "price": 3000, "base_held": 2, "cash": 40000,
+         "invested": 50000, "pnl": -2000, "roi_pct": -4},
+    ]}
+    p = build_portfolio(mg)
+    assert p["cash"] == 70000
+    assert p["winners"][0]["coin"] == "BTC"
+    assert p["losers"][0]["coin"] == "ETH"
+    labels = {a["label"] for a in p["allocation"]}
+    assert "USD (cash)" in labels and "BTC" in labels

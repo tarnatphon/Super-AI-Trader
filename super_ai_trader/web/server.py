@@ -202,6 +202,14 @@ def _morning_status() -> dict:
     return {"enabled": bool(config.get("morning_brief_enabled", False))}
 
 
+def _portfolio(payload: dict) -> dict:
+    from ..exchange.multibot import get_manager
+    from ..portfolio import build_portfolio
+    ex = payload.get("exchange", "binance")
+    overview = get_manager(ex).overview()
+    return build_portfolio(overview)
+
+
 def _morning_enable(payload: dict) -> dict:
     from .. import config
     config.save({"morning_brief_enabled": bool(payload.get("enabled", True))})
@@ -1247,6 +1255,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_morning_brief(payload))
         elif u.path == "/api/morning/enable":
             self._send(_morning_enable(payload))
+        elif u.path == "/api/portfolio":
+            self._send(_portfolio(payload))
         elif u.path == "/api/morning/status":
             self._send(_morning_status())
         elif u.path == "/api/morning/tick":

@@ -186,6 +186,9 @@ class MultiGrid:
                     "recent_fills": [{"side": f.get("side"), "price": f.get("price"),
                                        "amount": round(f.get("amount", 0), 6),
                                        "ts": f.get("ts")} for f in fills[-12:]],
+                    "cash": st.get("cash"),
+                    "base_held": round(st.get("base_held") or 0.0, 8),
+                    "invested": float(sess.cfg.investment),
                 })
             except Exception:
                 continue

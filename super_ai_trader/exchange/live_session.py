@@ -226,6 +226,8 @@ class LiveSession:
             "profit_curve": [t["equity"] for t in ticks if t.get("equity")],
             "price_curve": [t["price"] for t in ticks],
             "recent_fills": fills[-12:],
+            "cash": round(getattr(self.conn, "paper_usdt", self.cfg.investment), 2) if self.conn.paper else None,
+            "base_held": getattr(self.conn, "base_held", 0.0),
             "behavior": self.last_behavior,
             "events": list(self.events)[-12:],
             "poll_seconds": self.poll_seconds,
