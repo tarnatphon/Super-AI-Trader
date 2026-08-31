@@ -202,12 +202,34 @@ def _morning_status() -> dict:
     return {"enabled": bool(config.get("morning_brief_enabled", False))}
 
 
+def _currency_list() -> dict:
+    from ..currency import CURRENCIES, get_currency
+    return {"currencies": [{"code": c, "name": n, "symbol": sy} for c, n, sy in CURRENCIES],
+            "current": get_currency()}
+
+
+def _currency_set(payload: dict) -> dict:
+    from ..currency import set_currency, fmt_money
+    code = set_currency(payload.get("currency", "USD"))
+    return {"ok": True, "currency": code}
+
+
 def _portfolio(payload: dict) -> dict:
     from ..exchange.multibot import get_manager
     from ..portfolio import build_portfolio
+    from .. import currency
     ex = payload.get("exchange", "binance")
     overview = get_manager(ex).overview()
-    return build_portfolio(overview)
+    r = build_portfolio(overview)
+    # display-currency conversion (all values are USD/USDT-native)
+    code = payload.get("currency") or currency.get_currency()
+    r["currency"] = code
+    for k in ("total_value", "cash", "allocated", "total_pnl"):
+        r[k + "_fiat"] = round(currency.convert(r.get(k, 0) or 0, code), 2)
+    r["symbol"] = currency.symbol(code)
+    for a in r.get("allocation", []):
+        a["value_fiat"] = round(currency.convert(a["value"], code), 2)
+    return r
 
 
 def _morning_enable(payload: dict) -> dict:
@@ -1257,6 +1279,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_morning_enable(payload))
         elif u.path == "/api/portfolio":
             self._send(_portfolio(payload))
+        elif u.path == "/api/currency":
+            self._send(_currency_list())
+        elif u.path == "/api/currency/set":
+            self._send(_currency_set(payload))
         elif u.path == "/api/morning/status":
             self._send(_morning_status())
         elif u.path == "/api/morning/tick":

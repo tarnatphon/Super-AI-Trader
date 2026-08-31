@@ -200,6 +200,17 @@ HTML = r"""<!doctype html>
         <option value="es">Español</option>
       </select>
     </div>
+    <div style="margin-top:6px">
+      <label class="fine" for="curSel">&#x1F4B1; Currency:</label>
+      <select id="curSel" onchange="setCurrency(this.value)"
+              style="width:auto;padding:6px 10px;font-size:14px;display:inline-block;margin-left:6px">
+        <option value="USD">$ USD</option>
+        <option value="THB">&#3647; THB</option>
+        <option value="EUR">&euro; EUR</option>
+        <option value="GBP">&pound; GBP</option>
+        <option value="CNY">&yen; CNY</option>
+      </select>
+    </div>
   </header>
 
   <div class="mode">
@@ -1156,6 +1167,7 @@ showNav('trade');
 loadBriefing();
 loadWatcher();
 loadPortfolio();
+loadCurrency();
 (async()=>{try{const r=await post('/api/morning/status',{});const cb=document.getElementById('morningAuto');if(cb)cb.checked=!!r.enabled;}catch(e){}})();
 const _savedLang=localStorage.getItem('lang')||'en'; loadLanguage(_savedLang).then(()=>{const ls=document.getElementById('langSel'); if(ls) ls.value=_savedLang;});
 loadHistory();
@@ -2055,6 +2067,19 @@ async function loadPortfolio(){
   donutSvg(r.allocation||[]);
 }
 setInterval(loadPortfolio, 20000);
+
+
+let _curRate=1, _curSym='$', _cur='USD';
+async function loadCurrency(){
+  try{ const r=await apiGet('/api/currency'); _cur=r.current||'USD';
+    const sel=document.getElementById('curSel'); if(sel) sel.value=_cur;
+  }catch(e){}
+}
+async function setCurrency(code){
+  await post('/api/currency/set',{currency:code});
+  localStorage.setItem('cur',code); _cur=code;
+  try{ loadPortfolio(); }catch(e){}
+}
 
 </script>
 </body>

@@ -682,3 +682,9 @@ def test_portfolio_aggregation():
     assert p["losers"][0]["coin"] == "ETH"
     labels = {a["label"] for a in p["allocation"]}
     assert "USD (cash)" in labels and "BTC" in labels
+
+def test_currency_format():
+    from super_ai_trader import currency
+    assert currency.fmt_money(100, "USD").startswith("$")
+    assert currency.fmt_money(100, "THB").startswith("฿")
+    assert currency.convert(100, "THB") > currency.convert(100, "USD")
