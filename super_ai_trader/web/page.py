@@ -1590,7 +1590,8 @@ function notifyBody(){
   };
 }
 async function saveNotify(){
-  const r=await post('/api/notify/save',notifyBody());
+  const b=notifyBody(); b.notify_best_moments=document.getElementById('notifyMoments')?document.getElementById('notifyMoments').checked:false;
+  const r=await post('/api/notify/save',b);
   const el=document.getElementById('nt_result');
   el.style.color='#9af0cd'; el.textContent='Saved (password stored encrypted/locally).';
 }
@@ -2224,6 +2225,11 @@ async function refreshGoLiveWizard(){
   _mark('w3', !!document.getElementById('cname') && document.getElementById('cname').value, 'set name in Connect');
 }
 setTimeout(refreshGoLiveWizard, 2500);
+
+async function watcherNotify(){
+  try{ await post('/api/watcher/notify',{}); }catch(e){}
+}
+setInterval(watcherNotify, 60000);
 </script>
 </body>
 </html>

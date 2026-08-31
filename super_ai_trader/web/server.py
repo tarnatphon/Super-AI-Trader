@@ -210,6 +210,57 @@ def _morning_status() -> dict:
     return {"enabled": bool(config.get("morning_brief_enabled", False))}
 
 
+_WATCH_NOTIFIED: set = set()
+
+
+def _watcher_notify() -> dict:
+    """Run the 24/7 watcher and push new best-moment/pause/lock alerts
+    to email/Telegram (best-effort, only on state change)."""
+    from .. import config, notify as notify_mod
+    enabled = config.get("notify_best_moments", False)
+    # also accept flag stored in notify.json (from the notifications card)
+    try:
+        from ..notify import load_notify
+        if load_notify().get("notify_best_moments"):
+            enabled = True
+    except Exception:
+        pass
+    if not enabled:
+        return {"enabled": False, "sent": []}
+    w = _watcher({})
+    from ..notify import notify
+    from ..messages import msg
+    lang = config.get("lang", "en")
+    sent = []
+    # pause/lock are most important
+    for v in w.get("pauses", []):
+        key = f"PAUSE:{v['coin']}:{v['state']}"
+        if key not in _WATCH_NOTIFIED:
+            _WATCH_NOTIFIED.add(key)
+            r = notify(f"Super-AI-Trader {v['coin']}: {msg('state_PAUSE', lang)}", v.get("headline", ""))
+            if r.get("sent"): sent.append(key)
+    for v in w.get("banks", []):
+        key = f"BANK:{v['coin']}:{round(v.get('score',0))}"
+        if f"BANK:{v['coin']}" not in _WATCH_NOTIFIED:
+            _WATCH_NOTIFIED.add(f"BANK:{v['coin']}")
+            r = notify(f"Super-AI-Trader {v['coin']}: {msg('state_BANK', lang)}", v.get("headline", ""))
+            if r.get("sent"): sent.append(f"BANK:{v['coin']}")
+    # best buy/sell top pick only
+    if w.get("buys"):
+        b = max(w["buys"], key=lambda x: x["score"])
+        if b["score"] >= 85 and f"BUY:{b['coin']}" not in _WATCH_NOTIFIED:
+            _WATCH_NOTIFIED.add(f"BUY:{b['coin']}")
+            r = notify(msg("best_buy_now", lang, coin=b["coin"], price=b["price"]), b.get("headline", ""))
+            if r.get("sent"): sent.append(f"BUY:{b['coin']}")
+    if w.get("sells"):
+        b = max(w["sells"], key=lambda x: x["score"])
+        if b["score"] >= 85 and f"SELL:{b['coin']}" not in _WATCH_NOTIFIED:
+            _WATCH_NOTIFIED.add(f"SELL:{b['coin']}")
+            r = notify(msg("best_sell_now", lang, coin=b["coin"], price=b["price"]), b.get("headline", ""))
+            if r.get("sent"): sent.append(f"SELL:{b['coin']}")
+    return {"enabled": True, "sent": sent}
+
+
 def _health(payload=None) -> dict:
     """Lightweight connectivity check for the header status badge."""
     from ..exchange.connector import ExchangeConnector
@@ -1313,6 +1364,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_morning_enable(payload))
         elif u.path == "/api/portfolio":
             self._send(_portfolio(payload))
+        elif u.path == "/api/watcher/notify":
+            self._send(_watcher_notify())
         elif u.path == "/api/health":
             self._send(_health(payload))
         elif u.path == "/api/currency":
