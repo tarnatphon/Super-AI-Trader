@@ -688,3 +688,15 @@ def test_currency_format():
     assert currency.fmt_money(100, "USD").startswith("$")
     assert currency.fmt_money(100, "THB").startswith("฿")
     assert currency.convert(100, "THB") > currency.convert(100, "USD")
+
+def test_all_languages_complete():
+    from super_ai_trader.i18n import LANG, supported, t
+    en = set(LANG["en"])
+    for code, _ in supported:
+        assert code in LANG, f"missing dict {code}"
+        assert en <= set(LANG[code]), f"{code} missing keys: {en - set(LANG[code])}"
+    # spot checks
+    assert t("portfolio", "th") == "แดชบอร์ดพอร์ต"
+    assert t("emergency", "es").startswith("PARADA")
+    assert t("best_buy", "vi")
+    assert t("language", "zh")
