@@ -158,11 +158,26 @@ HTML = r"""<!doctype html>
     .mobiletabs a.active{color:#8fe9c2;background:rgba(22,199,132,.12)}
     body{padding-bottom:80px}
   }
+
+  .monbar{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .mon{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;min-width:90px}
+  .mon-k{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  .mon b{font-size:16px;font-variant-numeric:tabular-nums}
+  .mon-alert{flex:1;min-width:160px}
+  .mon-alert span:last-child{font-weight:700;font-size:13px}
+  @media(max-width:640px){.mon{min-width:0;flex:1}.mon b{font-size:14px}}
 </style>
 </head>
 <body>
 <div class="wrap">
 <div class="app-shell">
+  <div class="monbar" id="monBar">
+    <div class="mon"><span class="mon-k">bots</span><b id="mon_bots">–</b></div>
+    <div class="mon"><span class="mon-k">P/L</span><b id="mon_pnl">–</b></div>
+    <div class="mon"><span class="mon-k">cash</span><b id="mon_cash">–</b></div>
+    <div class="mon"><span class="mon-k">fills</span><b id="mon_fills">0</b></div>
+    <div class="mon mon-alert" id="mon_alert"><span class="mon-k">status</span><span id="mon_status">idle</span></div>
+  </div>
   <aside class="sidebar">
     <div class="side-brand"><span class="logo-mark">&#x1F4C8;</span> <b>Super&nbsp;<span style="color:var(--green)">AI</span>&nbsp;Trader</b></div>
     <nav>
@@ -1204,6 +1219,7 @@ loadWatcher();
 loadPortfolio();
 loadCurrency();
 healthCheck();
+liveMonitor();
 (async()=>{try{const r=await post('/api/morning/status',{});const cb=document.getElementById('morningAuto');if(cb)cb.checked=!!r.enabled;}catch(e){}})();
 const _savedLang=localStorage.getItem('lang')||'en'; loadLanguage(_savedLang).then(()=>{const ls=document.getElementById('langSel'); if(ls) ls.value=_savedLang;});
 loadHistory();
@@ -2155,6 +2171,25 @@ async function healthCheck(){
   }catch(e){ const d=document.getElementById('healthDot'); if(d) d.style.background='#ea3943'; }
 }
 setInterval(healthCheck, 30000);
+
+async function liveMonitor(){
+  let r; try{ r=await apiGet('/api/portfolio?exchange='+mgEx()+'&period=7'); }catch(e){ return; }
+  if(!r) return;
+  const set=(id,t)=>{const el=document.getElementById(id); if(el) el.innerHTML=t;};
+  set('mon_bots', r.count||0);
+  const pnl=r.total_pnl||0;
+  set('mon_pnl','<span class="'+(pnl>=0?'up':'down')+'">'+(pnl>=0?'+':'')+fmt(pnl)+'</span>');
+  set('mon_cash', fmt(r.cash||0));
+  let fills=0, paused=[], alerts=[];
+  try{ const w=await post('/api/watcher',{lang:localStorage.getItem('lang')||'en'});
+    (w.ranked||[]).forEach(v=>{ fills+=0; if(v.state==='PAUSE') paused.push(v.coin); });
+    (w.summary||[]).forEach(x=>alerts.push(x));
+    if(alerts[0]) set('mon_status', alerts[0]);
+  }catch(e){}
+  (r.holdings||[]).forEach(h=>fills+=0);
+  set('mon_fills', (r.winners||[]).length+'▲ '+(r.losers||[]).length+'▼');
+}
+setInterval(liveMonitor, 15000);
 </script>
 </body>
 </html>
