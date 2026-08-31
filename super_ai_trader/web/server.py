@@ -202,6 +202,19 @@ def _morning_status() -> dict:
     return {"enabled": bool(config.get("morning_brief_enabled", False))}
 
 
+def _health(payload=None) -> dict:
+    """Lightweight connectivity check for the header status badge."""
+    from ..exchange.connector import ExchangeConnector
+    ex = (payload or {}).get("exchange", "binance")
+    coin = (payload or {}).get("coin", "BTC")
+    try:
+        conn = ExchangeConnector(ex, paper=True)
+        price = conn.price(f"{coin}/USDT")
+        return {"ok": True, "exchange": ex, "coin": coin, "price": price}
+    except Exception as e:
+        return {"ok": False, "exchange": ex, "error": type(e).__name__}
+
+
 def _currency_list() -> dict:
     from ..currency import CURRENCIES, get_currency
     return {"currencies": [{"code": c, "name": n, "symbol": sy} for c, n, sy in CURRENCIES],
@@ -1292,6 +1305,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(_morning_enable(payload))
         elif u.path == "/api/portfolio":
             self._send(_portfolio(payload))
+        elif u.path == "/api/health":
+            self._send(_health(payload))
         elif u.path == "/api/currency":
             self._send(_currency_list())
         elif u.path == "/api/currency/set":

@@ -201,6 +201,10 @@ HTML = r"""<!doctype html>
       &#x1F6D1; EMERGENCY STOP &mdash; cancel ALL orders</button>
     <div id="emergencyNote" class="fine" style="margin-top:8px"></div>
     <div id="startupNotice" style="display:none;margin-top:12px;border-radius:12px;padding:12px 16px;font-size:16px"></div>
+    <div id="healthBadge" style="margin-top:10px;display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;padding:5px 12px;border-radius:999px;background:var(--card2);border:1px solid var(--line)">
+      <span id="healthDot" style="width:9px;height:9px;border-radius:50%;background:var(--muted)"></span>
+      <span id="healthText" class="fine">connecting…</span>
+    </div>
     <div style="margin-top:12px">
       <label class="fine" for="langSel">&#x1F310; Language:</label>
       <select id="langSel" onchange="setLanguage(this.value)"
@@ -1192,6 +1196,7 @@ loadBriefing();
 loadWatcher();
 loadPortfolio();
 loadCurrency();
+healthCheck();
 (async()=>{try{const r=await post('/api/morning/status',{});const cb=document.getElementById('morningAuto');if(cb)cb.checked=!!r.enabled;}catch(e){}})();
 const _savedLang=localStorage.getItem('lang')||'en'; loadLanguage(_savedLang).then(()=>{const ls=document.getElementById('langSel'); if(ls) ls.value=_savedLang;});
 loadHistory();
@@ -2128,6 +2133,18 @@ function donutDrill(label){
   if(typeof showNav==='function') showNav('bots');
   setTimeout(()=>{ window.scrollTo({top:0,behavior:'smooth'}); },150);
 }
+
+async function healthCheck(){
+  try{
+    const ex=(document.getElementById('mk_exchange')?document.getElementById('mk_exchange').value:'binance');
+    const r=await post('/api/health',{exchange:ex,coin:(document.getElementById('mk_coin')?document.getElementById('mk_coin').value:'BTC')});
+    const dot=document.getElementById('healthDot'), txt=document.getElementById('healthText'), bd=document.getElementById('healthBadge');
+    if(!dot) return;
+    if(r.ok){ dot.style.background='#16c784'; txt.textContent='Live · '+r.exchange+' · '+r.price; txt.style.color='#8fe9c2'; if(bd)bd.style.borderColor='rgba(22,199,132,.4)'; }
+    else { dot.style.background='#ea3943'; txt.textContent=r.exchange+' offline (practice)'; txt.style.color='#ff9b9b'; }
+  }catch(e){ const d=document.getElementById('healthDot'); if(d) d.style.background='#ea3943'; }
+}
+setInterval(healthCheck, 30000);
 </script>
 </body>
 </html>
