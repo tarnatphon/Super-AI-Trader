@@ -684,6 +684,7 @@ HTML = r"""<!doctype html>
 
     <div style="margin-top:18px;border-top:1px dashed var(--line);padding-top:14px">
       <h2 style="color:#ffc7c7;font-size:19px">&#x1F534; REAL-MONEY multi-coin grids</h2>
+      <button class="btn btn-gray" style="width:auto;margin:6px 0;padding:9px 16px" onclick="openWizard()">&#x1F680; How to go live (safe steps)</button>
       <button class="btn btn-gray" style="margin:6px 0" onclick="livePreflight()">&#x2705; Run safety checklist before starting</button>
       <div id="lg_checks" style="margin:6px 0 10px"></div>
       <p class="help">This places REAL orders using your unlocked trade-only key. Withdrawals stay OFF
@@ -827,6 +828,25 @@ HTML = r"""<!doctype html>
   <footer>Educational software · not financial advice · runs on your own computer (127.0.0.1) · Super-AI-Trader</footer>
 </div>
 
+<!-- GO-LIVE WIZARD -->
+<div class="modal" id="goLiveWizard">
+  <div class="box" style="max-width:640px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2 style="margin:0">&#x1F680; Go live — safe path</h2>
+      <button class="btn btn-gray" style="width:auto;margin:0;padding:8px 14px" onclick="closeWizard()">Close &#x2715;</button>
+    </div>
+    <ol id="wizardSteps" style="line-height:1.9;padding-left:22px;margin-top:14px">
+      <li id="w1"><b>Run it in PRACTICE</b> first — multi-coin grids + Time Machine for a while. <span id="w1state" class="fine"></span></li>
+      <li id="w2"><b>Create a trade-only key</b> on Binance/Gate (withdrawals OFF, IP allowlist). <span id="w2state" class="fine"></span></li>
+      <li id="w3"><b>Save the key</b> in Connect an exchange (set a vault password). <span id="w3state" class="fine"></span></li>
+      <li id="w4"><b>Check key + balance</b> — read-only confirm. <span id="w4state" class="fine"></span></li>
+      <li id="w5"><b>Set a tiny cap</b> (20–50 USDT/coin) and run the safety checklist. <span id="w5state" class="fine"></span></li>
+      <li id="w6"><b>Build (no orders)</b>, review, type <b>I AGREE</b>, ARM. <span id="w6state" class="fine"></span></li>
+      <li id="w7"><b>Watch the first fills</b>, then Stop &amp; cancel when done. <span id="w7state" class="fine"></span></li>
+    </ol>
+    <div class="fine" style="margin-top:10px">The bot can BUY/SELL within your cap but can NEVER withdraw. Start tiny; you are in control.</div>
+  </div>
+</div>
 <script>
 let MODE='practice';
 function setMode(m){
@@ -2190,6 +2210,20 @@ async function liveMonitor(){
   set('mon_fills', (r.winners||[]).length+'▲ '+(r.losers||[]).length+'▼');
 }
 setInterval(liveMonitor, 15000);
+
+function openWizard(){ document.getElementById('goLiveWizard').classList.add('show'); }
+function closeWizard(){ document.getElementById('goLiveWizard').classList.remove('show'); }
+function _mark(id,ok,txt){ const el=document.getElementById(id+'state'); if(el){ el.innerHTML=ok?' ✅ <span class="up">'+(txt||'done')+'</span>':' '+(txt||''); } }
+async function refreshGoLiveWizard(){
+  try{
+    // paper history
+    const h=await apiGet('/api/journal');
+    _mark('w1', (h&&h.stats&&h.stats.runs>0), h&&h.stats?h.stats.runs+' practice runs':'no practice runs yet');
+  }catch(e){}
+  // key saved? use connect names
+  _mark('w3', !!document.getElementById('cname') && document.getElementById('cname').value, 'set name in Connect');
+}
+setTimeout(refreshGoLiveWizard, 2500);
 </script>
 </body>
 </html>
