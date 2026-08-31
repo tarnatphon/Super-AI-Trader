@@ -146,6 +146,18 @@ HTML = r"""<!doctype html>
   /* expandable bot rows */
   .botrow{cursor:pointer}
   .botdetail{display:none} .botdetail.open{display:block}
+
+  .mobiletabs{display:none}
+  @media(max-width:880px){
+    .mobiletabs{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:50;
+      background:rgba(13,19,32,.94);backdrop-filter:blur(10px);border-top:1px solid var(--line);
+      justify-content:space-around;padding:8px 6px calc(8px + env(safe-area-inset-bottom));}
+    .mobiletabs a{flex:1;text-align:center;color:var(--muted);font-size:11px;font-weight:700;
+      text-decoration:none;padding:6px 4px;border-radius:8px;cursor:pointer}
+    .mobiletabs a span{display:block;font-size:20px;margin-bottom:2px}
+    .mobiletabs a.active{color:#8fe9c2;background:rgba(22,199,132,.12)}
+    body{padding-bottom:80px}
+  }
 </style>
 </head>
 <body>
@@ -780,6 +792,12 @@ HTML = r"""<!doctype html>
 
   </main>
 </div>
+<!-- MOBILE BOTTOM TAB BAR -->
+<nav class="mobiletabs">
+  <a onclick="mobileTab('trade')"><span>&#x1F4C8;</span>Dashboard</a>
+  <a onclick="mobileTab('bots')"><span>&#x1F50D;</span>Watchlist</a>
+  <a onclick="mobileTab('history')"><span>&#x1F4CB;</span>Reports</a>
+</nav>
   <footer>Educational software · not financial advice · runs on your own computer (127.0.0.1) · Super-AI-Trader</footer>
 </div>
 
@@ -2043,7 +2061,7 @@ function donutSvg(items){
     const x1=cx+R*Math.cos(start), y1=cy+R*Math.sin(start);
     const x2=cx+R*Math.cos(start+ang), y2=cy+R*Math.sin(start+ang);
     const large=ang>Math.PI?1:0;
-    h+=`<path d="M ${cx} ${cy} L ${x1.toFixed(1)} ${y1.toFixed(1)} A ${R} ${R} 0 ${large} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z" fill="${it.color||'#666'}" opacity="0.9"/>`;
+    h+=`<path data-donut="${it.label}" onclick="donutDrill('${it.label}')" style="cursor:pointer" d="M ${cx} ${cy} L ${x1.toFixed(1)} ${y1.toFixed(1)} A ${R} ${R} 0 ${large} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z" fill="${it.color||'#666'}" opacity="0.9"><title>${it.label}</title></path>`;
     // label at mid
     const mid=start+ang/2; const lx=cx+(R*0.62)*Math.cos(mid), ly=cy+(R*0.62)*Math.sin(mid);
     if(frac>0.05) h+=`<text x="${lx}" y="${ly}" fill="#fff" font-size="9" text-anchor="middle">${it.label}</text>`;
@@ -2094,6 +2112,21 @@ async function setPeriod(d){
   _period=d;
   document.querySelectorAll('.pf-period').forEach(b=>b.classList.toggle('active',+(b.dataset.d)===d));
   loadPortfolio();
+}
+
+function mobileTab(name){
+  // reuse section navigation: Dashboard=trade, Watchlist=bots, Reports=history
+  if(typeof showNav==='function') showNav(name);
+  document.querySelectorAll('.mobiletabs a').forEach(a=>a.classList.remove('active'));
+  event&&event.currentTarget&&event.currentTarget.classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function donutDrill(label){
+  if(label==='USD (cash)'){ toast('Cash (unallocated USDT) — not a coin','green'); return; }
+  toast('Selected '+label+' — opening bots view','green');
+  if(typeof showNav==='function') showNav('bots');
+  setTimeout(()=>{ window.scrollTo({top:0,behavior:'smooth'}); },150);
 }
 </script>
 </body>
