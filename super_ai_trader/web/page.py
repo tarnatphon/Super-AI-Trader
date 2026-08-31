@@ -435,6 +435,12 @@ HTML = r"""<!doctype html>
   <div class="card section" data-section="trade" id="portfolioCard">
     <h2>&#x1F4BC; Portfolio dashboard</h2>
     <p class="help">Total value of all your paper grids — cash + holdings. Like a real portfolio dashboard.</p>
+    <div style="display:flex;gap:6px;margin:10px 0">
+      <button class="chip pf-period" data-d="1" onclick="setPeriod(1)">1 day</button>
+      <button class="chip pf-period active" data-d="7" onclick="setPeriod(7)">7 days</button>
+      <button class="chip pf-period" data-d="30" onclick="setPeriod(30)">30 days</button>
+      <button class="chip pf-period" data-d="0" onclick="setPeriod(0)">Total</button>
+    </div>
     <div class="metrics" id="pfTiles" style="grid-template-columns:repeat(3,1fr)">
       <div class="metric"><div class="k">Total value</div><div class="v" id="pf_total">–</div></div>
       <div class="metric"><div class="k">P &amp; L (all)</div><div class="v" id="pf_pnl">–</div></div>
@@ -2049,12 +2055,13 @@ function donutSvg(items){
   svg.innerHTML=h;
 }
 async function loadPortfolio(){
-  let r; try{ r=await apiGet('/api/portfolio?exchange='+mgEx()); }catch(e){ return; }
+  let r; try{ r=await apiGet('/api/portfolio?exchange='+mgEx()+'&period='+_period); }catch(e){ return; }
   if(!r) return;
   const set=(id,txt)=>{const el=document.getElementById(id); if(el) el.innerHTML=txt;};
   const pnl=r.total_pnl||0;
   set('pf_total','<b>'+fmt(r.total_value)+'</b>');
-  set('pf_pnl','<span class="'+(pnl>=0?'up':'down')+'">'+(pnl>=0?'+':'')+fmt(pnl)+' ('+r.total_pnl_pct+'%)</span>');
+  const shownPnl=(r.period_days? r.period_pnl: r.total_pnl)||pnl;
+  set('pf_pnl','<span class="'+(shownPnl>=0?'up':'down')+'">'+(shownPnl>=0?'+':'')+fmt(shownPnl)+'</span>');
   set('pf_cash','<b>'+fmt(r.cash)+'</b>');
   set('pf_winners',(r.winners||[]).map(w=>`<div>${w.coin}: <span class="up">+${w.roi_pct}%</span></div>`).join('')||'<span class=fine>none yet</span>');
   set('pf_losers',(r.losers||[]).map(w=>`<div>${w.coin}: <span class="down">${w.roi_pct}%</span></div>`).join('')||'<span class=fine>none yet</span>');
@@ -2081,6 +2088,13 @@ async function setCurrency(code){
   try{ loadPortfolio(); }catch(e){}
 }
 
+
+let _period=7;
+async function setPeriod(d){
+  _period=d;
+  document.querySelectorAll('.pf-period').forEach(b=>b.classList.toggle('active',+(b.dataset.d)===d));
+  loadPortfolio();
+}
 </script>
 </body>
 </html>

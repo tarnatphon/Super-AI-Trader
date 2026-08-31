@@ -10,9 +10,9 @@ DONUT_COLORS = ["#f7931a", "#627eea", "#f0b90b", "#26a7df", "#e84393",
                 "#8e44ad", "#16c784", "#ea3943", "#f6c945", "#4aa3ff"]
 
 
-def build_portfolio(multigrid: dict | None = None) -> dict:
-    """multigrid = MultiGrid.summary() / overview-like dict. Accepts the
-    overview (has per-coin rows with cash/base_held/price) — we use that."""
+def build_portfolio(multigrid: dict | None = None, period_days: int = 0) -> dict:
+    """multigrid = MultiGrid overview dict. period_days: 0 = session total,
+    else 1/7/30 — period P&L estimated from the equity curve."""
     coins = (multigrid or {}).get("coins") or []
 
     holdings = []
@@ -31,6 +31,16 @@ def build_portfolio(multigrid: dict | None = None) -> dict:
         total_invested += invested or 0
         pnl = float(c.get("pnl") or 0)
         roi = float(c.get("roi_pct") or 0)
+        # Period change from the equity curve (sampled). Full curve length
+        # maps roughly to the running session; period picks a fraction.
+        curve = c.get("equity_curve") or []
+        period_pnl = pnl
+        if period_days and len(curve) > 4:
+            # treat the curve as recent history; take the last 1/(7/period) portion
+            frac = min(1.0, period_days / 30.0)
+            n = max(2, int(len(curve) * frac))
+            window = curve[-n:]
+            period_pnl = (window[-1] - window[0]) if window else pnl
         holdings.append({
             "coin": c.get("coin"),
             "price": price,
@@ -39,6 +49,7 @@ def build_portfolio(multigrid: dict | None = None) -> dict:
             "cash": round(cash, 2),
             "pnl": round(pnl, 2),
             "roi_pct": roi,
+            "period_pnl": round(period_pnl, 2),
             "paused": c.get("paused"),
         })
 
@@ -64,11 +75,15 @@ def build_portfolio(multigrid: dict | None = None) -> dict:
                 "color": "#5b6a86",
             })
 
-    by_roi = sorted(holdings, key=lambda h: h["roi_pct"], reverse=True)
-    winners = [{"coin": h["coin"], "roi_pct": h["roi_pct"], "pnl": h["pnl"]}
-               for h in by_roi if h["roi_pct"] > 0][:5]
-    losers = [{"coin": h["coin"], "roi_pct": h["roi_pct"], "pnl": h["pnl"]}
-              for h in reversed(by_roi) if h["roi_pct"] < 0][:5]
+    sort_key = "period_pnl" if period_days else "pnl"
+    by_pnl = sorted(holdings, key=lambda h: h.get(sort_key, h["pnl"]), reverse=True)
+    winners = [{"coin": h["coin"], "roi_pct": h["roi_pct"],
+                "pnl": h.get(sort_key, h["pnl"])}
+               for h in by_pnl if h.get(sort_key, h["pnl"]) > 0][:5]
+    losers = [{"coin": h["coin"], "roi_pct": h["roi_pct"],
+               "pnl": h.get(sort_key, h["pnl"])}
+              for h in reversed(by_pnl) if h.get(sort_key, h["pnl"]) < 0][:5]
+    total_period_pnl = round(sum(h.get("period_pnl", h["pnl"]) for h in holdings), 2)
 
     total_pct = (total_pnl / total_invested * 100) if total_invested else 0.0
 
@@ -84,4 +99,6 @@ def build_portfolio(multigrid: dict | None = None) -> dict:
         "winners": winners,
         "losers": losers,
         "count": len(coins),
+        "period_days": period_days,
+        "period_pnl": total_period_pnl if period_days else round(total_pnl, 2),
     }

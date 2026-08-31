@@ -220,7 +220,11 @@ def _portfolio(payload: dict) -> dict:
     from .. import currency
     ex = payload.get("exchange", "binance")
     overview = get_manager(ex).overview()
-    r = build_portfolio(overview)
+    try:
+        period = int(payload.get("period", 0) or 0)
+    except Exception:
+        period = 0
+    r = build_portfolio(overview, period_days=period)
     # display-currency conversion (all values are USD/USDT-native)
     code = payload.get("currency") or currency.get_currency()
     r["currency"] = code
