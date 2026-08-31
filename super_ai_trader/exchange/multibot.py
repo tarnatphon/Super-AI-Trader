@@ -52,25 +52,48 @@ class MultiGrid:
         self.day_start_pnl = 0.0          # basket P/L at the local midnight boundary
         self.day_key = None
         self.kill_reason = None
+        self.max_bots = 6             # hard cap on concurrent coins (perf guard)
+        self.max_total_allowance = None  # optional total USDT cap across all bots
         self._lock = threading.Lock()
+
+    MAX_BOTS_HARD = 12  # never run more than this even if asked
 
     def start(self, coins: list[str], investment: float = 1000.0,
               range_pct: float = 12.0, grids: int = 25,
               range_pct_map: dict | None = None,
-              max_drawdown_pct: float | None = None) -> dict:
+              max_drawdown_pct: float | None = None,
+              max_bots: int | None = None,
+              max_total_allowance: float | None = None) -> dict:
         """Start (or restart) paper grids for the given coins. Non-blocking.
 
-        max_drawdown_pct: if set (negative, e.g. -3.0), auto-stop ALL grids
-        when the basket's total P/L falls below that percent."""
+        Caps so it never overloads:
+        - max_bots: max concurrent coins (capped at MAX_BOTS_HARD).
+        - max_total_allowance: total USDT across ALL bots; per-bot investment
+          is reduced automatically if the sum would exceed it.
+        """
+        # de-dup + trim to safe bot count
+        coins = list(dict.fromkeys([c.strip().upper() for c in coins if c and c.strip()]))
+        cap = min(int(max_bots or self.max_bots or len(coins)),
+                  self.MAX_BOTS_HARD, len(coins))
+        dropped = coins[cap:]
+        coins = coins[:cap]
+        # total allowance guard
+        total_allowance = max_total_allowance if max_total_allowance is not None else self.max_total_allowance
+        per_bot = investment
+        if total_allowance:
+            per_bot = min(investment, float(total_allowance) / max(1, len(coins)))
+
         self.max_drawdown_pct = max_drawdown_pct
         self.kill_tripped = False
         self.kill_reason = None
+        self.max_bots = cap
+        self.max_total_allowance = total_allowance
         self.stop()  # clear any previous set first
         range_pct_map = range_pct_map or {}
         started = []
         for coin in coins:
             sym = f"{coin}/USDT"
-            conn = ExchangeConnector(self.exchange, paper=True, paper_usdt=investment)
+            conn = ExchangeConnector(self.exchange, paper=True, paper_usdt=per_bot)
             try:
                 ref = conn.price(sym)
             except Exception as e:  # network/ccxt issues
@@ -81,7 +104,7 @@ class MultiGrid:
                 symbol=sym,
                 lower=ref * (1 - rp / 100),
                 upper=ref * (1 + rp / 100),
-                grids=grids, mode="geometric", investment=investment,
+                grids=grids, mode="geometric", investment=per_bot,
                 fee_pct=0.1, range_pct=rp,
                 stop_loss_price=ref * (1 - rp * 2 / 100),
                 take_profit_price=ref * (1 + rp * 2 / 100),
@@ -95,9 +118,13 @@ class MultiGrid:
                 continue
             with self._lock:
                 self.sessions[coin] = sess
-            started.append({"coin": coin, "ok": True, "price": round(ref, 6)})
+            started.append({"coin": coin, "ok": True, "price": round(ref, 6), "investment": per_bot})
         self.running = bool(self.sessions)
-        return {"ok": self.running, "started": started, "count": len(self.sessions)}
+        return {"ok": self.running, "started": started, "count": len(self.sessions),
+                "per_bot": per_bot, "dropped": dropped,
+                "total_allowance": round(per_bot * len(self.sessions), 2),
+                "note": (f"Capped to {cap} bots" + (f"; {len(dropped)} not started: {', '.join(dropped)}" if dropped else "")
+                          + ("; allowance reduced per-bot" if total_allowance and investment != per_bot else ""))}
 
     def check_drawdown(self) -> dict:
         """If total basket P/L breaches the drawdown threshold, stop all

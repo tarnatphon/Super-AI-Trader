@@ -524,6 +524,13 @@ HTML = r"""<!doctype html>
         <input id="mg_dd" type="number" value="5"></div>
       <div class="fine" style="align-self:end">If total practice P/L falls this much, all grids stop automatically and you get an alert.</div>
     </div>
+    <div class="row">
+      <div><label>Max bots at once (1–12, keeps it light)</label>
+        <input id="mg_maxbots" type="number" value="6" min="1" max="12"></div>
+      <div><label>Total allowance across ALL bots (USDT, 0 = no extra cap)</label>
+        <input id="mg_allowance" type="number" value="0"></div>
+    </div>
+    <div class="fine">The bot never runs more than 12 grids and never spends beyond the total allowance — per-bot amount is auto-reduced to stay inside it.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
       <button class="chip" style="border-color:#29c484;color:#9af0cd" onclick="setStrategy('safe')">&#x1F6E1; Conservative</button>
       <button class="chip" style="border-color:#ffc14d;color:#ffe2a8" onclick="setStrategy('balanced')">&#x2696;&#xFE0F; Balanced</button>
@@ -1445,12 +1452,15 @@ async function multiStart(){
     investment:parseFloat(document.getElementById('mg_inv').value||1000),
     range_pct:parseFloat(document.getElementById('mg_range').value||12),
     grids:parseInt(document.getElementById('mg_grids').value||25),
-    max_drawdown_pct: -Math.abs(parseFloat(document.getElementById('mg_dd').value||0))
+    max_drawdown_pct: -Math.abs(parseFloat(document.getElementById('mg_dd').value||0)),
+    max_bots: parseInt(document.getElementById('mg_maxbots').value||6),
+    max_allowance: parseFloat(document.getElementById('mg_allowance').value||0)||null
   });
   msg.style.color = r.ok ? '#9af0cd':'#ffc7c7';
   const ok=(r.started||[]).filter(x=>x.ok).length;
   const bad=(r.started||[]).filter(x=>!x.ok);
-  msg.innerHTML = r.ok ? ('&#x2705; Started '+ok+' grid(s) '+
+  const capNote = (r.note?('<br><span class="fine">'+r.note+' · per-bot '+fmt(r.per_bot||0)+'</span>'):'');
+  msg.innerHTML = r.ok ? ('&#x2705; Started '+ok+' grid(s) '+capNote+
       (bad.length?('<br>failed: '+bad.map(b=>b.coin+' ('+b.error.slice(0,40)+')').join(', ')):''))
     : ('&#x26A0;&#xFE0F; Could not start grids. Install ccxt and check internet, then Test connection.');
   if(r.ok){ multiRefresh(); multiSummary(); loadBriefing(); localStorage.setItem('wiz_demo','1'); localStorage.setItem('wiz_grid','1'); refreshWizard(); }

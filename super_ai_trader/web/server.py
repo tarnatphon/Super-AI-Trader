@@ -93,12 +93,20 @@ def _multigrid_start(payload: dict) -> dict:
         dd = float(dd) if dd not in (None, "", 0) else None
     except Exception:
         dd = None
+    max_bots = payload.get("max_bots", None)
+    max_allow = payload.get("max_allowance", None)
+    try: max_bots = int(max_bots) if max_bots not in (None, "", 0) else None
+    except Exception: max_bots = None
+    try: max_allow = float(max_allow) if max_allow not in (None, "", 0) else None
+    except Exception: max_allow = None
     return mgr.start(
         coins,
         investment=float(payload.get("investment", 1000)),
         range_pct=float(payload.get("range_pct", 12)),
         grids=int(payload.get("grids", 25)),
         max_drawdown_pct=dd,
+        max_bots=max_bots,
+        max_total_allowance=max_allow,
     )
 
 

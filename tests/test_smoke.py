@@ -710,3 +710,22 @@ def test_dynamic_message_translations():
     for key, d in M.items():
         for l in ("en", "th", "zh", "vi", "es"):
             assert l in d, f"{key} missing {l}"
+
+def test_multibot_caps_prevent_overload():
+    import super_ai_trader.exchange.multibot as mb
+    class FakeConn:
+        def __init__(self,*a,**k): self.paper=True; self.paper_usdt=1000
+        def price(self,s): return 100.0
+        def equity(self,p): return 1000.0
+        def cancel_all_open_orders(self,s): return 0
+        def tick_paper(self,s,p): return []
+    orig=mb.ExchangeConnector; mb.ExchangeConnector=FakeConn
+    try:
+        m=mb.MultiGrid()
+        r=m.start(["BTC","ETH","SOL","BNB","XRP","DOGE","ADA","DOT","LINK","LTC"],
+                  investment=1000, max_bots=5, max_total_allowance=1000)
+        assert r["count"]<=5, "bot count cap"
+        assert r["per_bot"]<=200, "allowance should reduce per-bot"
+        assert len(r["dropped"])>=5
+    finally:
+        mb.ExchangeConnector=orig
