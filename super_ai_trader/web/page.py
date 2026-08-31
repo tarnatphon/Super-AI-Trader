@@ -2001,7 +2001,7 @@ setInterval(()=>{ try{ if(document.getElementById('dca_rows')) dcaRefresh(); }ca
 
 async function loadBriefing(){
   try{
-    const r=await post('/api/briefing',{exchange:mgEx()});
+    const r=await post('/api/briefing',{exchange:mgEx(),lang:(localStorage.getItem('lang')||'en')});
     const h=document.getElementById('briefHeadline');
     if(!h) return;
     const pos=(r.total_pnl||0)>=0?'up':'down';
@@ -2017,14 +2017,14 @@ setInterval(loadBriefing, 15000);
 
 async function loadWatcher(){
   try{
-    const r=await apiGet('/api/watcher');
+    const r=await post('/api/watcher',{lang:(localStorage.getItem('lang')||'en')});
     const box=document.getElementById('watchSummary'); if(!box) return;
     const color={BEST_BUY:'var(--green)',BEST_SELL:'var(--red)',BANK:'var(--green)',PAUSE:'#ffd54a',GRID:'var(--muted)'};
     let html='<div class="fine" style="margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">👁️ 24/7 watcher — best moments now</div>';
     (r.summary||[]).forEach(l=>{ html+=`<div style="margin:4px 0;font-weight:600">${l}</div>`; });
     html+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">';
     (r.ranked||[]).slice(0,8).forEach(v=>{
-      html+=`<span class="chip" style="border-color:${color[v.state]}33;color:${color[v.state]}">${v.coin} · ${v.state.replace(/_/g,' ')} · ${v.score}/100</span>`;
+      html+=`<span class="chip" style="border-color:${color[v.state]}33;color:${color[v.state]}">${v.coin} · ${(v.state_label||v.state.replace(/_/g,' '))} · ${v.score}/100</span>`;
     });
     html+='</div>';
     box.innerHTML=html;

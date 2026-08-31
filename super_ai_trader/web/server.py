@@ -266,12 +266,14 @@ def _morning_brief(payload: dict) -> dict:
     return {"sent": res.get("sent", False), "channels": res, "body": body}
 
 
-def _watcher() -> dict:
+def _watcher(payload=None) -> dict:
     """24/7 watcher: run over any live multi-grid sessions and rank
     best buy / sell moments across watched coins (paper; no orders)."""
     from ..exchange.multibot import get_manager
     from ..watcher import run_watch
-    ex = "binance"
+    from .. import config
+    lang = (payload or {}).get("lang") or config.get("lang", "en")
+    ex = (payload or {}).get("exchange", "binance")
     mgr = get_manager(ex)
     summ = mgr.summary()
     coins = summ.get("coins") or []
@@ -287,15 +289,22 @@ def _watcher() -> dict:
         st = sess.status()
         obs.append({"coin": coin, "price": price, "cfg": sess.cfg,
                     "regime": st.get("regime"), "trail": st.get("trail")})
-    return run_watch(obs)
+    return run_watch(obs, lang=lang)
 
 
 def _briefing(payload: dict) -> dict:
     from ..exchange.multibot import get_manager
     from ..briefing import build_briefing
+    from .. import config
     ex = payload.get("exchange", "binance")
+    lang = payload.get("lang") or config.get("lang", "en")
     summ = get_manager(ex).summary()
-    return build_briefing(summ)
+    b = build_briefing(summ)
+    # localize the golden rule line if present
+    from ..messages import msg
+    if b.get("lines"):
+        b["lines"][0] = msg("golden_rule", lang)
+    return b
 
 
 def _multigrid_drawdown() -> dict:
@@ -1292,7 +1301,7 @@ class Handler(BaseHTTPRequestHandler):
         elif u.path == "/api/morning/tick":
             self._send(_morning_check_and_send(False))
         elif u.path == "/api/watcher":
-            self._send(_watcher())
+            self._send(_watcher(payload))
         elif u.path == "/api/briefing":
             self._send(_briefing(payload))
         elif u.path == "/api/multigrid/drawdown":

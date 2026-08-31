@@ -23,7 +23,7 @@ BANK = "BANK"
 HOLD = "GRID"
 
 
-def assess(coin: str, price: float, cfg, regime=None, trail=None) -> dict:
+def assess(coin: str, price: float, cfg, regime=None, trail=None, lang: str = "en") -> dict:
     """Assess one coin and return a watch verdict with a 0-100 quality score."""
     inst = grid_instruction(price, cfg, regime=regime, trail=trail)
     lo, hi = cfg.lower, cfg.upper
@@ -87,13 +87,13 @@ def _classify_state(state: str) -> tuple:
     }.get(state, ("⚙️ RUNNING", "muted", ""))
 
 
-def run_watch(observations: list[dict]) -> dict:
+def run_watch(observations: list[dict], lang: str = "en") -> dict:
     """observations: list of dicts each with coin, price, cfg, optional regime/trail.
     Returns ranked opportunities and new (changed) alerts."""
     verdicts = []
     for obs in observations:
         v = assess(obs["coin"], float(obs["price"]), obs["cfg"],
-                   regime=obs.get("regime"), trail=obs.get("trail"))
+                   regime=obs.get("regime"), trail=obs.get("trail"), lang=lang)
         verdicts.append(v)
 
     # rank: best opportunities first
@@ -104,25 +104,25 @@ def run_watch(observations: list[dict]) -> dict:
     pauses = [v for v in verdicts if v["state"] == PAUSE]
 
     summary_lines = []
+    from .messages import msg
     if buys:
         best = max(buys, key=lambda v: v["score"])
-        summary_lines.append(f"Best BUY now: {best['coin']} at {best['price']} "
-                             f"(bottom {100-best['range_pos_pct']:.0f}% — buy low).")
+        summary_lines.append(msg("best_buy_now", lang, coin=best["coin"], price=best["price"]))
     if sells:
         best = max(sells, key=lambda v: v["score"])
-        summary_lines.append(f"Best SELL now: {best['coin']} at {best['price']} "
-                             f"(top {best['range_pos_pct']:.0f}% — take profit).")
+        summary_lines.append(msg("best_sell_now", lang, coin=best["coin"], price=best["price"]))
     if banks:
-        summary_lines.append("Profit banked on: " + ", ".join(b["coin"] for b in banks))
+        summary_lines.append((", ".join(b["coin"] for b in banks)))
     if pauses:
-        summary_lines.append("Paused (crash protection): " + ", ".join(p["coin"] for p in pauses))
+        summary_lines.append(msg("paused_list", lang, coins=", ".join(p["coin"] for p in pauses)))
     if not summary_lines:
-        summary_lines.append("No standout moment yet — grids are running their buy-low/sell-high cycles.")
+        summary_lines.append(msg("no_standout", lang))
 
+    for v in ranked:
+        v["state_label"] = msg("state_"+v["state"], lang)
     return {
         "ranked": ranked,
         "buys": buys, "sells": sells, "banks": banks, "pauses": pauses,
         "summary": summary_lines,
-        "golden_rule": "BUY LOW, SELL HIGH — watch 24/7; the AI only raises your hand "
-                       "in strong buy zones, profit zones, or to protect you.",
+        "golden_rule": msg("golden_rule", lang),
     }

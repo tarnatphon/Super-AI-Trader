@@ -700,3 +700,13 @@ def test_all_languages_complete():
     assert t("emergency", "es").startswith("PARADA")
     assert t("best_buy", "vi")
     assert t("language", "zh")
+
+def test_dynamic_message_translations():
+    from super_ai_trader.messages import msg, M
+    assert msg("golden_rule", "th")
+    assert msg("best_buy_now", "vi", coin="SOL", price="92")
+    assert msg("action_HOLD", "zh") == "暂停"
+    # every message has all 5 languages
+    for key, d in M.items():
+        for l in ("en", "th", "zh", "vi", "es"):
+            assert l in d, f"{key} missing {l}"
