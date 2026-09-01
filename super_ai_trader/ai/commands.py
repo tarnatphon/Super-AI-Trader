@@ -33,41 +33,91 @@ INTENTS = {
 }
 
 
+# Multilingual intent keywords (th / zh / vi / es) — English keywords stay inline.
+_ML = {
+    "optimize": ("ปรับ", "ตั้งค่าดีที่สุด", "เหมาะสมที่สุด", "优化", "最佳设置", "tối ưu", "cài đặt tốt nhất", "optimizar", "mejor configuración"),
+    "paper": ("ทดลอง", "กระดาษ", "เดโม่", "模拟", "练习", "thử nghiệm", "giả lập", "papel", "simulacro", "demo"),
+    "chart": ("กราฟ", "อินดิเคเตอร์", "ตัวชี้วัด", "เส้นค่าเฉลี่ย", "图表", "指标", "均线", "biểu đồ", "chỉ báo", "đường trung bình", "gráfico", "indicadores", "media móvil"),
+    "behavior": ("แรงซื้อ", "แรงขาย", "สมุดออเดอร์", "ผู้ซื้อ", "ผู้ขาย", "ใครกำลังซื้อ",
+                 "订单簿", "买卖盘", "买方", "卖方", "谁在买",
+                 "áp lực mua", "áp lực bán", "sổ lệnh", "người mua", "người bán",
+                 "libro de órdenes", "compradores", "vendedores", "presión de compra", "presión de venta"),
+    "dca": ("ทยอยซื้อ", "ทุกวัน", "ทุกสัปดาห์", "ทุกเดือน", "ถัวเฉลี่ย", "ซื้อประจำ", "ซื้อสม่ำเสมอ",
+            "定投", "每天", "每周", "每月", "分批买", "定期买",
+            "mua định kỳ", "mỗi ngày", "mỗi tuần", "mỗi tháng", "trung bình giá", "mua đều đặn",
+            "cada día", "cada semana", "cada mes", "compra periódica", "comprar con regularidad"),
+    "grid": ("กริด", "วางกริด", "บอทกริด", "ซื้อถูกขายแพง",
+             "网格", "网格交易", "低买高卖",
+             "lưới", "bot lưới", "mua thấp bán cao",
+             "rejilla", "cuadrícula", "comprar bajo vender alto"),
+    "learn": ("เรียนรู้", "ฝึกโมเดล", "สอน", "ทำนาย",
+              "学习", "训练模型", "教", "预测",
+              "học", "huấn luyện", "dạy", "dự đoán",
+              "aprender", "entrenar el modelo", "enseñar", "predecir"),
+    "backtest": ("ย้อนหลัง", "ทดสอบย้อนหลัง",
+                 "回测", "历史测试",
+                 "kiểm tra lại", "test lại", "backtest",
+                 "prueba histórica", "datos históricos"),
+    "safety": ("ปลอดภัย", "ความปลอดภัย", "คีย์ api", "กุญแจ", "เชื่อมต่อ", "เงินปลอดภัย",
+               "安全", "密钥", "钥匙", "连接", "资金安全",
+               "an toàn", "bảo mật", "khóa api", "kết nối", "tiền an toàn",
+               "seguro", "seguridad", "clave api", "proteger", "mi dinero"),
+    "analyze": ("วิเคราะห์", "แนะนำ", "ซื้อดีไหม", "ซื้อไหม", "ควรซื้อ", "เป็นยังไง", "ดูให้",
+                "分析", "看看", "怎么样", "该不该买", "能买吗", "建议",
+                "phân tích", "có nên mua", "nhìn vào", "đánh giá", "khuyến nghị",
+                "analizar", "mirar", "debería comprar", "comprar ahora", "recomendación", "qué tal"),
+    "risk": ("หยุดขาดทุน", "ความเสี่ยง", "เป้าหมาย", "ขาดทุนรายวัน", "ทำกำไร",
+             "止损", "风险", "目标", "止盈",
+             "dừng lỗ", "rủi ro", "mục tiêu", "chốt lời",
+             "riesgo", "pérdida diaria", "objetivo", "ganancia objetivo"),
+    "help": ("ช่วยเหลือ", "ทำอะไรได้บ้าง", "วิธีใช้",
+             "帮助", "你能做什么", "怎么用",
+             "giúp đỡ", "làm được gì", "hướng dẫn",
+             "ayuda", "qué puedes hacer", "cómo usar"),
+}
+
+
+def _hit(low: str, intent: str, en_keywords: tuple) -> bool:
+    return any(k in low for k in en_keywords) or any(k in low for k in _ML.get(intent, ()))
+
+
 def classify(text: str) -> str:
     low = text.lower()
-    if any(k in low for k in ("optimize", "best trailing", "best position", "best settings",
+    if _hit(low, "optimize", ("optimize", "best trailing", "best position", "best settings",
                               "find the best", "tune", "fine-tune", "fine tune")):
         return "optimize"
     # Order matters: check specific intents first.
-    if any(k in low for k in ("paper", "practice trade", "demo trade")):
+    if _hit(low, "paper", ("paper", "practice trade", "demo trade")):
         return "paper"
-    if any(k in low for k in ("read the chart", "read chart", "read the graph", "indicators",
-                              "ema", "macd", "boll", "rsi", "sar", "supertrend", "super trend")):
+    if _hit(low, "chart", ("read the chart", "read chart", "read the graph", "indicators",
+                           "ema", "macd", "boll", "rsi", "sar", "supertrend", "super trend")):
         return "chart"
-    if any(k in low for k in ("live", "order book", "orderbook", "buyers", "sellers",
+    if _hit(low, "behavior", ("live", "order book", "orderbook", "buyers", "sellers",
                               "human", "right now", "depth", "who is buying", "who's buying",
                               "live behavior")):
         return "behavior"
     # DCA / recurring buy intent (e.g. "$50 BTC every week", "dollar cost average")
-    if any(k in low for k in ("dca", "dollar cost", "recurring", "every day", "every week",
-                              "every month", "daily buy", "weekly", "monthly", "auto-buy",
-                              "auto buy", "average in", "cost average", "each day",
-                              "every friday", "every monday", "periodic")):
+    if _hit(low, "dca", ("dca", "dollar cost", "recurring", "every day", "every week",
+                         "every month", "daily buy", "weekly", "monthly", "auto-buy",
+                         "auto buy", "average in", "cost average", "each day",
+                         "every friday", "every monday", "periodic")):
         return "dca"
     # Grid / strategy intents before general safety, so "safe grid" -> grid.
-    if any(k in low for k in ("grid", "buy low", "sell high")):
+    if _hit(low, "grid", ("grid", "buy low", "sell high")):
         return "grid"
-    if any(k in low for k in ("learn", "train", "teach the", "predict the next")):
+    if _hit(low, "learn", ("learn", "train", "teach the", "predict the next")):
         return "learn"
-    if any(k in low for k in ("backtest", "test the strategy", "test strategy", "how would it do")):
+    if _hit(low, "backtest", ("backtest", "test the strategy", "test strategy", "how would it do")):
         return "backtest"
-    if any(k in low for k in ("safety", "security", "protect", "hack", "connect", "api key",
-                              "vault", "shield", "money safe", "is it safe", "safe?", "my money")):
+    if _hit(low, "safety", ("safety", "security", "protect", "hack", "connect", "api key",
+                            "vault", "shield", "money safe", "is it safe", "safe?", "my money")):
         return "safety"
-    if any(k in low for k in ("analyze", "look at", "what about", "should i buy", "pressure", "zone")):
+    if _hit(low, "analyze", ("analyze", "look at", "what about", "should i buy", "pressure", "zone")):
         return "analyze"
-    if any(k in low for k in ("risk", "stop loss", "daily loss", "take profit", "target", "set ")):
+    if _hit(low, "risk", ("risk", "stop loss", "daily loss", "take profit", "target", "set ")):
         return "risk"
+    if _hit(low, "help", ("help", "what can you do", "how do i", "commands")):
+        return "help"
     return "help"
 
 

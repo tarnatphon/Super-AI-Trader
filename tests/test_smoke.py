@@ -692,7 +692,7 @@ def test_currency_format():
 def test_all_languages_complete():
     from super_ai_trader.i18n import LANG, supported, t
     en = set(LANG["en"])
-    for code, _ in supported:
+    for code, _ in supported():
         assert code in LANG, f"missing dict {code}"
         assert en <= set(LANG[code]), f"{code} missing keys: {en - set(LANG[code])}"
     # spot checks
@@ -729,3 +729,38 @@ def test_multibot_caps_prevent_overload():
         assert len(r["dropped"])>=5
     finally:
         mb.ExchangeConnector=orig
+
+def test_ai_intent_multilingual():
+    from super_ai_trader.ai.commands import classify
+    # analyze in all 5 languages
+    assert classify("analyze BTC") == "analyze"
+    assert classify("วิเคราะห์ BTC ตอนนี้") == "analyze"
+    assert classify("分析比特币") == "analyze"
+    assert classify("phân tích ETH") == "analyze"
+    assert classify("analizar SOL") == "analyze"
+    assert classify("ควรซื้อ BNB ไหม") == "analyze"
+    # grid
+    assert classify("set up grid for ETH") == "grid"
+    assert classify("วางกริด BTC") == "grid"
+    assert classify("网格交易") == "grid"
+    assert classify("đặt lưới") == "grid"
+    # safety / risk / dca / behavior
+    assert classify("เงินปลอดภัยไหม") == "safety"
+    assert classify("资金安全吗") == "safety"
+    assert classify("ตั้งหยุดขาดทุน 5%") == "risk"
+    assert classify("止损") == "risk"
+    assert classify("ทยอยซื้อ BTC ทุกสัปดาห์") == "dca"
+    assert classify("定投比特币") == "dca"
+    assert classify("แรงซื้อตอนนี้") == "behavior"
+    assert classify("谁在买比特币") == "behavior"
+    assert classify("ช่วยด้วย") == "help"
+    assert classify("帮助") == "help"
+
+def test_ai_safe_word_multilingual():
+    from super_ai_trader.ai.assistant import offline_parse
+    assert offline_parse("safe grid for BTC")["safe"] is True
+    assert offline_parse("วางกริด BTC แบบปลอดภัย")["safe"] is True
+    assert offline_parse("保守网格 比特币")["safe"] is True
+    assert offline_parse("lưới an toàn cho BTC")["safe"] is True
+    assert offline_parse("rejilla segura para BTC")["safe"] is True
+    assert offline_parse("BTC grid")["safe"] is False

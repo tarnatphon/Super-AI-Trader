@@ -65,7 +65,12 @@ def offline_parse(text: str) -> dict:
     wide_w = "wide" in text or "bouncy" in text or "volatile" in text
     rng = nums["range_pct"] or (8 if low_w else 20 if wide_w else 12)
     coin = _find_coin(text)
-    safe = any(w in text.lower() for w in ("safe", "steady", "careful", "kid", "beginner"))
+    safe_words = ("safe", "steady", "careful", "kid", "beginner",
+                  "ปลอดภัย", "ระมัดระวัง", "มั่นคง", "มือใหม่",
+                  "安全", "保守", "新手",
+                  "an toàn", "cẩn thận", "ổn định", "người mới",
+                  "seguro", "segura", "cuidado", "conservador", "principiante")
+    safe = any(w in text.lower() for w in safe_words)
     return {
         "symbol": f"{coin}/USDT", "coin": coin,
         "investment": nums["investment"] or 1000.0,
